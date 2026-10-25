@@ -1,26 +1,234 @@
 @import "tailwindcss";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/600.css";
 
+/*
+  视觉方向：深色、电影感，绿色「荧光粒子」是唯一的强调元素。
+  粒子的含义是「噪声 → 画面」——和扩散模型生成图片的过程同构，所以只在登录和「正在生成」时出现。
+*/
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --night: #0d1110; /* 底色，带一点绿的石墨黑 */
+  --panel: #141918;
+  --raised: #1b2120;
+  --line: #27302d;
+  --ink: #e4ece8;
+  --muted: #7d8c86;
+  --spark: #5cf2a0; /* 荧光绿：生成、进行中、可操作 */
+  --spark-dim: rgba(92, 242, 160, 0.14);
+  --amber: #ffb547; /* 额度提醒 */
+  --danger: #ff6b5b;
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-night: var(--night);
+  --color-panel: var(--panel);
+  --color-raised: var(--raised);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-spark: var(--spark);
+  --color-spark-dim: var(--spark-dim);
+  --color-amber: var(--amber);
+  --color-danger: var(--danger);
+  --font-sans: "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+html,
+body {
+  background: var(--night);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--spark);
+  color: var(--night);
+}
+
+:focus-visible {
+  outline: 2px solid var(--spark);
+  outline-offset: 2px;
+}
+
+/* 按钮 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  height: 2.25rem;
+  padding: 0 0.95rem;
+  border-radius: 0.6rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink);
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) {
+  border-color: #3a4642;
+  background: #222a28;
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.btn-spark {
+  background: var(--spark);
+  border-color: var(--spark);
+  color: #062214;
+}
+.btn-spark:hover:not(:disabled) {
+  background: #7af7b4;
+  border-color: #7af7b4;
+}
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--raised);
+  color: var(--ink);
+}
+.btn-sm {
+  height: 1.85rem;
+  padding: 0 0.65rem;
+  font-size: 0.8rem;
+  border-radius: 0.5rem;
+}
+
+.input {
+  width: 100%;
+  height: 2.5rem;
+  padding: 0 0.8rem;
+  border-radius: 0.6rem;
+  background: var(--night);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--spark);
+}
+textarea.input {
+  height: auto;
+  padding: 0.6rem 0.8rem;
+  line-height: 1.6;
+  resize: none;
+}
+select.input {
+  appearance: none;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.tag-live {
+  color: var(--spark);
+  border-color: rgba(92, 242, 160, 0.35);
+  background: var(--spark-dim);
+}
+
+/* 表格 */
+.tbl {
+  width: 100%;
+  font-size: 0.875rem;
+  border-collapse: collapse;
+}
+.tbl th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+}
+.tbl td {
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+}
+.tbl tr:last-child td {
+  border-bottom: 0;
+}
+
+/* 正在生成：框体内的粒子噪声（纯 CSS 兜底；主效果由 <NoiseField> canvas 绘制） */
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(92, 242, 160, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgba(92, 242, 160, 0);
   }
 }
+.live-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--spark);
+  animation: pulse-ring 1.6s infinite;
+}
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes caret {
+  50% {
+    opacity: 0;
+  }
+}
+.caret::after {
+  content: "▍";
+  color: var(--spark);
+  animation: caret 1s steps(1) infinite;
+}
+
+/* React Flow 深色适配 */
+.react-flow__attribution {
+  display: none;
+}
+.react-flow__controls button {
+  background: var(--raised) !important;
+  border-color: var(--line) !important;
+  color: var(--ink) !important;
+  fill: var(--ink) !important;
+}
+.react-flow__minimap {
+  background: var(--panel) !important;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+}
+
+.scroll-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }
