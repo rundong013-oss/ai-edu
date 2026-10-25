@@ -3,6 +3,6 @@
 set -euo pipefail
 cd /opt/ai-edu
 git pull --ff-only
-docker compose up -d --build
+docker compose up -d --build </dev/null
 docker image prune -f >/dev/null
 echo "已更新到 $(git log -1 --format='%h %s')"

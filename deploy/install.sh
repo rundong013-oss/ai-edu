@@ -3,6 +3,7 @@
 # 用法：curl -fsSL https://raw.githubusercontent.com/rundong013-oss/ai-edu/main/deploy/install.sh | sudo bash
 set -euo pipefail
 
+main() {
 REPO="https://github.com/rundong013-oss/ai-edu"
 DIR="/opt/ai-edu"
 say() { printf "\n\033[1;32m==> %s\033[0m\n" "$*"; }
@@ -28,7 +29,7 @@ fi
 
 say "1/5 安装 Docker（已安装则跳过）"
 if ! command -v docker >/dev/null 2>&1; then
-  curl -fsSL https://get.docker.com | sh
+  curl -fsSL https://get.docker.com | sh </dev/null
 fi
 systemctl enable --now docker >/dev/null 2>&1 || true
 apt-get install -y git >/dev/null 2>&1 || true
@@ -70,11 +71,11 @@ fi
 
 say "4/5 构建并启动（第一次约 3–6 分钟）"
 mkdir -p data && chown -R 1000:1000 data   # 容器里以 node 用户（uid 1000）运行
-docker compose up -d --build
+docker compose up -d --build </dev/null
 
 say "5/5 等待服务就绪"
 for i in $(seq 1 90); do
-  if docker compose exec -T app node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>/dev/null; then OK=1; break; fi
+  if docker compose exec -T app node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" </dev/null 2>/dev/null; then OK=1; break; fi
   sleep 2
 done
 if [ "${OK:-}" != "1" ]; then echo "启动超时，查看日志：cd $DIR && docker compose logs app --tail 100"; exit 1; fi
@@ -85,3 +86,6 @@ say "部署完成！访问地址：$URL"
 cat credentials.txt
 echo
 echo "账号密码保存在 $DIR/credentials.txt；之后更新代码：sudo bash $DIR/deploy/update.sh"
+}
+
+main "$@"
