@@ -13,7 +13,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!r) return jsonError(404, "找不到工作区");
   if (r.room.status !== "LIVE") return jsonError(403, "老师还没开课");
   const lesson = await db.query.lessons.findFirst({ where: eq(lessons.id, r.room.lessonId) });
-  const { type, posX = 0, posY = 0 } = (await req.json()) as { type: "IMAGE" | "VIDEO"; posX?: number; posY?: number };
+  const { type: rawType, posX = 0, posY = 0 } = (await req.json()) as { type: "IMAGE" | "VIDEO" | "TEXT"; posX?: number; posY?: number };
+  const type = rawType === "VIDEO" || rawType === "TEXT" ? rawType : "IMAGE";
+  const NAME = { IMAGE: "图片", VIDEO: "视频", TEXT: "文字" } as const;
 
   const ok = await db
     .update(workspaces)
@@ -27,8 +29,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .values({
       workspaceId: id,
       key: `spare${ok[0].n}`,
-      type: type === "VIDEO" ? "VIDEO" : "IMAGE",
-      title: `${type === "VIDEO" ? "视频" : "图片"}备用框体 ${ok[0].n}`,
+      type,
+      title: `${NAME[type]}备用框体 ${ok[0].n}`,
       isSpare: true,
       maxGenerations: 2,
       aspectRatio: type === "VIDEO" ? "16:9" : "1:1",

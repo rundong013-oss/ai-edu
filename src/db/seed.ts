@@ -3,7 +3,8 @@ import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { and, eq } from "drizzle-orm";
 import { db } from "./index";
-import { users, courses, lessons, tasks, frameTemplates, licenses } from "./schema";
+import { users, courses, lessons, tasks, frameTemplates, licenses, promptBlocks } from "./schema";
+import { DEFAULT_BLOCKS } from "../server/prompts";
 import { curriculum, PLAN_PLACEHOLDER } from "../content/curriculum";
 
 async function seedUsers() {
@@ -71,6 +72,7 @@ async function seedCurriculum() {
             maxGenerations: f.maxGenerations ?? 3,
             upstreamKeys: f.upstreamKeys ?? [],
             crossLessonRefs: f.crossLessonRefs ?? [],
+            blockCategories: f.blockCategories ?? [],
             posX: f.pos[0],
             posY: f.pos[1],
           };
@@ -93,8 +95,15 @@ async function seedLicenses() {
   }
 }
 
+async function seedBlocks() {
+  const n = await db.select().from(promptBlocks);
+  if (n.length) return; // 积木库已在后台维护过，不覆盖
+  await db.insert(promptBlocks).values(DEFAULT_BLOCKS.map((b, i) => ({ ...b, sortOrder: i })));
+}
+
 (async () => {
   await seedUsers();
+  await seedBlocks();
   await seedCurriculum();
   await seedLicenses();
   const n = await db.select().from(lessons);

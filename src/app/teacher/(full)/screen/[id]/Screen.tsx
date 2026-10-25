@@ -30,7 +30,9 @@ export function Screen({ initial }: { initial: ClassroomLive }) {
       {spot ? (
         <section className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-5 p-10">
           <div className="flex min-h-0 w-full flex-1 items-center justify-center">
-            {spot.type === "WEB" ? (
+            {spot.type === "TEXT" ? (
+              <div className="max-h-full max-w-3xl overflow-auto whitespace-pre-wrap rounded-2xl bg-panel p-10 text-2xl leading-relaxed">{spot.textContent}</div>
+            ) : spot.type === "WEB" ? (
               <iframe src={spot.mediaUrl} title={spot.title} sandbox="allow-scripts" className="h-full w-[min(480px,100%)] rounded-[28px] border-[6px] border-[#1f2624] bg-white" />
             ) : spot.type === "VIDEO" && !spot.mediaUrl.endsWith(".svg") ? (
               <video src={spot.mediaUrl} className="max-h-full max-w-full rounded-2xl" autoPlay loop muted playsInline />
@@ -48,8 +50,8 @@ export function Screen({ initial }: { initial: ClassroomLive }) {
         <section className="relative grid flex-1 auto-rows-min grid-cols-4 gap-5 overflow-auto p-10">
           {d.submissions.map((w) => (
             <figure key={w.id} className="card overflow-hidden">
-              {w.type === "WEB" ? (
-                <div className="grid aspect-[4/3] place-items-center bg-panel text-muted">网页作品</div>
+              {w.type === "WEB" || w.type === "TEXT" ? (
+                <div className="aspect-[4/3] overflow-hidden whitespace-pre-wrap bg-panel p-4 text-sm text-muted">{w.type === "TEXT" ? w.textContent : "网页作品"}</div>
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={w.coverUrl ?? w.mediaUrl} alt={w.title} className="aspect-[4/3] w-full object-cover" />

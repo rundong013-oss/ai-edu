@@ -6,6 +6,7 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { classrooms, lessons, submissions, workspaces } from "@/db/schema";
 import { dataPath, ensureDir, projectDir } from "@/lib/paths";
+import { getSetting } from "@/server/prompts";
 
 const SCAFFOLD_ROOT = path.resolve(process.cwd(), "content", "scaffolds");
 
@@ -17,7 +18,7 @@ export const BASE_CLAUDE_MD = `# 项目规则（平台自动生成）
 - 回复学生时用简单、鼓励的中文，不超过 3 句话；不要贴大段代码给学生看。
 `;
 
-type AssetEntry = { file: string; type: "image" | "video"; title: string; from: string };
+type AssetEntry = { file: string; type: "image" | "video" | "text"; title: string; from: string };
 
 /** 收集学生在同一课程其它课堂里提交过的画布作品，作为编程素材 */
 async function collectAssets(workspaceId: string): Promise<{ src: string; entry: AssetEntry }[]> {
@@ -40,7 +41,7 @@ async function collectAssets(workspaceId: string): Promise<{ src: string; entry:
         src: dataPath(s.path),
         entry: {
           file: `assets/${s.frameKey ?? "work"}-${i + 1}${ext}`,
-          type: s.type === "VIDEO" ? ("video" as const) : ("image" as const),
+          type: s.type === "VIDEO" ? ("video" as const) : s.type === "TEXT" ? ("text" as const) : ("image" as const),
           title: s.title,
           from: l ? `第 ${l.index} 节「${l.title}」` : "",
         },
@@ -63,7 +64,9 @@ export async function prepareCodingProject(workspaceId: string) {
     if (fs.existsSync(scaffold)) fs.cpSync(scaffold, dir, { recursive: true });
     else fs.writeFileSync(path.join(dir, "index.html"), "<!doctype html><meta charset=utf-8><title>我的网页</title><h1>我的网页</h1>");
   }
-  fs.writeFileSync(path.join(dir, "CLAUDE.md"), `${BASE_CLAUDE_MD}\n${lesson?.codingClaudeMd ?? ""}\n`);
+  // 平台层规则（机构后台可改）+ 课节规则
+  const platformRule = await getSetting("rules.coding");
+  fs.writeFileSync(path.join(dir, "CLAUDE.md"), `${BASE_CLAUDE_MD}- ${platformRule}\n\n${lesson?.codingClaudeMd ?? ""}\n`);
 
   // 素材
   const assetsDir = ensureDir(path.join(dir, "assets"));
@@ -77,7 +80,7 @@ export async function prepareCodingProject(workspaceId: string) {
   // 学生手动拖进来的素材（不在清单里的文件）也保留
   for (const f of fs.readdirSync(assetsDir)) {
     if (f === "assets.json" || manifest.some((m) => m.file === `assets/${f}`)) continue;
-    manifest.push({ file: `assets/${f}`, type: /\.(mp4|webm)$/.test(f) ? "video" : "image", title: f, from: "上传" });
+    manifest.push({ file: `assets/${f}`, type: /\.(mp4|webm)$/.test(f) ? "video" : /\.(txt|md)$/.test(f) ? "text" : "image", title: f, from: "上传" });
   }
   fs.writeFileSync(path.join(assetsDir, "assets.json"), JSON.stringify(manifest, null, 2));
   return { dir, assets: manifest };

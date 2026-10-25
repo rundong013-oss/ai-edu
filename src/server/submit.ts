@@ -1,9 +1,34 @@
 import fs from "node:fs";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "@/db";
-import { frames, generations, submissions, workspaces } from "@/db/schema";
-import { dataPath, ensureDir, projectDir, rel } from "@/lib/paths";
+import { codingMessages, frames, generations, submissions, workspaces, type Frame, type WorkProcess } from "@/db/schema";
+import { dataPath, ensureDir, fileUrl, projectDir, rel } from "@/lib/paths";
+
+/** 画布作品的创作过程：沿着连线往上找，按「先做的在前」列出每一步的提示词、积木、尝试次数和结果 */
+async function canvasProcess(frame: Frame): Promise<WorkProcess> {
+  const steps: WorkProcess["steps"] = [];
+  const seen = new Set<string>();
+  const visit = async (f: Frame, depth: number) => {
+    if (seen.has(f.id) || depth > 4) return;
+    seen.add(f.id);
+    if (f.upstreamFrameIds.length) {
+      const ups = await db.query.frames.findMany({ where: inArray(frames.id, f.upstreamFrameIds) });
+      for (const u of ups) await visit(u, depth + 1);
+    }
+    const g = f.selectedGenerationId ? await db.query.generations.findFirst({ where: eq(generations.id, f.selectedGenerationId) }) : null;
+    if (!g) return;
+    steps.push({
+      title: f.title.replace(/框$/, ""),
+      prompt: g.prompt,
+      blocks: f.blocks.map((b) => b.label),
+      attempts: f.usedCount,
+      output: f.type === "TEXT" ? g.outputText : fileUrl(g.outputPath),
+    });
+  };
+  await visit(frame, 0);
+  return { kind: "canvas", steps };
+}
 
 /** 提交画布作品：取框体当前选定的输出。同一框体重复提交 = 更新为最新选定 */
 export async function submitFrame(workspaceId: string, frameId: string) {
@@ -12,11 +37,19 @@ export async function submitFrame(workspaceId: string, frameId: string) {
   if (!ws || !f?.selectedGenerationId) return null;
   const g = await db.query.generations.findFirst({ where: eq(generations.id, f.selectedGenerationId) });
   if (!g?.outputPath) return null;
+  const process = await canvasProcess(f);
+  const fields = {
+    path: g.outputPath,
+    coverPath: f.type === "TEXT" ? null : g.outputPath,
+    textContent: g.outputText,
+    process,
+    createdAt: new Date(),
+  };
   const existing = await db.query.submissions.findFirst({
     where: and(eq(submissions.workspaceId, workspaceId), eq(submissions.frameKey, f.key)),
   });
   if (existing) {
-    await db.update(submissions).set({ path: g.outputPath, coverPath: g.outputPath, createdAt: new Date() }).where(eq(submissions.id, existing.id));
+    await db.update(submissions).set(fields).where(eq(submissions.id, existing.id));
     return existing;
   }
   const [s] = await db
@@ -27,10 +60,9 @@ export async function submitFrame(workspaceId: string, frameId: string) {
       classroomId: ws.classroomId,
       type: f.type,
       title: f.title.replace(/框$/, ""),
-      path: g.outputPath,
-      coverPath: g.outputPath,
       frameKey: f.key,
       shareToken: nanoid(10),
+      ...fields,
     })
     .returning();
   return s;
@@ -44,7 +76,15 @@ export async function submitWeb(workspaceId: string, title: string, coverAsset: 
   if (!fs.existsSync(src)) return null;
   const snapId = nanoid(12);
   const dest = ensureDir(dataPath("submissions", snapId));
-  fs.cpSync(src, dest, { recursive: true, filter: (p) => !p.includes(`${"/"}.claude`) && !p.endsWith("CLAUDE.md") });
+  fs.cpSync(src, dest, { recursive: true, filter: (p) => !p.includes("/.claude") && !p.endsWith("CLAUDE.md") });
+  // 创作过程：学生发给 AI 的每一句话
+  const msgs = await db.query.codingMessages.findMany({ where: eq(codingMessages.workspaceId, workspaceId), orderBy: asc(codingMessages.seq) });
+  const process: WorkProcess = {
+    kind: "coding",
+    steps: msgs
+      .filter((m) => m.role === "user")
+      .map((m, i) => ({ title: `第 ${i + 1} 轮`, prompt: String((m.content as { text?: string }).text ?? "") })),
+  };
   const [s] = await db
     .insert(submissions)
     .values({
@@ -56,6 +96,7 @@ export async function submitWeb(workspaceId: string, title: string, coverAsset: 
       path: rel(dest),
       // 封面：项目里的某个素材（相对项目根目录，如 assets/fusion-1.png）→ 快照里的同一文件
       coverPath: coverAsset && /^assets\/[\w.-]+$/.test(coverAsset) && fs.existsSync(dataPath("submissions", snapId, coverAsset)) ? `${rel(dest)}/${coverAsset}` : null,
+      process,
       shareToken: nanoid(10),
     })
     .returning();

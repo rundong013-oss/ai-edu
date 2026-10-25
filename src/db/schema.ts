@@ -75,7 +75,7 @@ export const frameTemplates = sqliteTable("frame_templates", {
   taskId: text("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
   key: text("key").notNull(), // 课节内唯一，用于连线引用
   order: integer("ord").notNull().default(0),
-  type: text("type", { enum: ["IMAGE", "VIDEO"] }).notNull(),
+  type: text("type", { enum: ["IMAGE", "VIDEO", "TEXT"] }).notNull(),
   title: text("title").notNull(),
   promptTemplate: text("prompt_template").notNull(), // 含 {{slot}}
   slots: text("slots", { mode: "json" }).$type<Slot[]>().notNull().default([]),
@@ -84,6 +84,8 @@ export const frameTemplates = sqliteTable("frame_templates", {
   upstreamKeys: text("upstream_keys", { mode: "json" }).$type<string[]>().notNull().default([]),
   // 跨课节引用：取同一学生在某课节某框体的选定输出，如 ["S1-1:fusion"]
   crossLessonRefs: text("cross_lesson_refs", { mode: "json" }).$type<string[]>().notNull().default([]),
+  // 这个框体开放哪些类别的提示词积木（空 = 按框体类型用默认类别）
+  blockCategories: text("block_categories", { mode: "json" }).$type<string[]>().notNull().default([]),
   posX: real("pos_x").notNull().default(0),
   posY: real("pos_y").notNull().default(0),
 });
@@ -153,13 +155,15 @@ export const frames = sqliteTable(
     templateId: text("template_id"),
     taskId: text("task_id"), // 备用框体为 null
     key: text("key").notNull(),
-    type: text("type", { enum: ["IMAGE", "VIDEO"] }).notNull(),
+    type: text("type", { enum: ["IMAGE", "VIDEO", "TEXT"] }).notNull(),
     title: text("title").notNull(),
     isSpare: integer("is_spare", { mode: "boolean" }).notNull().default(false),
     prompt: text("prompt").notNull().default(""),
     slotValues: text("slot_values", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
     aspectRatio: text("aspect_ratio").notNull().default("1:1"),
     upstreamFrameIds: text("upstream_frame_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
+    // 学生拼上去的提示词积木（存文本快照，积木库之后改动不影响已用的）
+    blocks: text("blocks", { mode: "json" }).$type<PickedBlock[]>().notNull().default([]),
     maxGenerations: integer("max_generations").notNull(),
     usedCount: integer("used_count").notNull().default(0),
     selectedGenerationId: text("selected_generation_id"),
@@ -182,6 +186,8 @@ export const generations = sqliteTable(
     provider: text("provider").notNull(),
     model: text("model").notNull(),
     outputPath: text("output_path"), // 相对 DATA_DIR
+    outputText: text("output_text"), // 生文字框体的结果
+    finalPrompt: text("final_prompt"), // 实际发给模型的提示词（含积木、上游文字、平台规则）
     error: text("error"),
     createdAt: createdAt(),
     startedAt: ts("started_at"),
@@ -232,11 +238,14 @@ export const submissions = sqliteTable("submissions", {
   workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   studentId: text("student_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   classroomId: text("classroom_id").notNull().references(() => classrooms.id, { onDelete: "cascade" }),
-  type: text("type", { enum: ["IMAGE", "VIDEO", "WEB"] }).notNull(),
+  type: text("type", { enum: ["IMAGE", "VIDEO", "WEB", "TEXT"] }).notNull(),
   title: text("title").notNull(),
   path: text("path").notNull(), // IMAGE/VIDEO：文件；WEB：快照目录（相对 DATA_DIR）
   coverPath: text("cover_path"),
   frameKey: text("frame_key"),
+  textContent: text("text_content"), // 文字作品
+  // 创作过程：给分享页展示「孩子是怎么做出来的」
+  process: text("process", { mode: "json" }).$type<WorkProcess | null>(),
   shareToken: text("share_token").notNull().unique(),
   createdAt: createdAt(),
 });
@@ -248,7 +257,7 @@ export const usageRecords = sqliteTable(
     studentId: text("student_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     classroomId: text("classroom_id").notNull(),
     lessonId: text("lesson_id").notNull(),
-    kind: text("kind", { enum: ["IMAGE", "VIDEO", "CODING"] }).notNull(),
+    kind: text("kind", { enum: ["IMAGE", "VIDEO", "TEXT", "CODING"] }).notNull(),
     provider: text("provider").notNull(),
     model: text("model").notNull(),
     units: integer("units").notNull().default(1), // 图片张数 / 视频条数 / 对话轮数
@@ -263,6 +272,46 @@ export const usageRecords = sqliteTable(
   (t) => [index("usage_student").on(t.studentId), index("usage_lesson").on(t.lessonId)],
 );
 
+// ---------- 提示词：积木库 + 平台规则 ----------
+
+export type PickedBlock = { id: string; category: string; label: string; text: string };
+
+export type WorkProcess = {
+  kind: "canvas" | "coding";
+  steps: { title: string; prompt: string; blocks?: string[]; refs?: string[]; attempts?: number; output?: string | null }[];
+};
+
+export const BLOCK_CATEGORIES = [
+  { key: "subject", label: "主体" },
+  { key: "detail", label: "细节" },
+  { key: "scene", label: "场景" },
+  { key: "style", label: "风格" },
+  { key: "light", label: "光影" },
+  { key: "camera", label: "镜头" },
+  { key: "action", label: "动作" },
+  { key: "fx", label: "特效" },
+  { key: "tone", label: "语气" },
+  { key: "format", label: "体裁" },
+] as const;
+
+export const promptBlocks = sqliteTable("prompt_blocks", {
+  id: id(),
+  category: text("category").notNull(),
+  label: text("label").notNull(), // 学生看到的名字，如「宫崎骏童话」
+  text: text("text").notNull(), // 拼进提示词的内容
+  sortOrder: integer("sort_order").notNull().default(0),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  createdAt: createdAt(),
+});
+
+/** 平台级配置（键值对），目前存平台层隐藏提示词 */
+export const settings = sqliteTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+});
+
+export type PromptBlock = typeof promptBlocks.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Course = typeof courses.$inferSelect;
 export type Lesson = typeof lessons.$inferSelect;

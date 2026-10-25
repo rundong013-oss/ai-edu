@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/Shell";
 import { usageSummary } from "@/server/queries";
 
 const s = (ms: number | null) => (ms === null ? "—" : `${(ms / 1000).toFixed(1)}s`);
-const KIND = { IMAGE: "生图", VIDEO: "生视频", CODING: "Vibe Coding" } as const;
+const KIND = { IMAGE: "生图", VIDEO: "生视频", TEXT: "生文字", CODING: "Vibe Coding" } as const;
 
 export default async function UsagePage() {
   const u = await usageSummary();

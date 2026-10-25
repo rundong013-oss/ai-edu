@@ -1,17 +1,20 @@
-// 画布生成：额度原子扣减 → 异步调用模型 → 落盘 → 记用量。失败会退回本次次数。
+// 画布生成：输入检查 → 额度原子扣减 → 拼提示词（平台层 + 模板 + 积木 + 上游素材）→ 异步调用模型 → 落盘 → 记用量。
+// 失败会退回本次次数。
 import fs from "node:fs";
 import path from "node:path";
 import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "@/db";
-import { classrooms, courses, frames, generations, lessons, usageRecords, workspaces, type Frame } from "@/db/schema";
+import { classrooms, courses, frames, generations, lessons, usageRecords, workspaces, type Frame, type PickedBlock } from "@/db/schema";
 import { dataPath, ensureDir, mimeOf, rel } from "@/lib/paths";
 import { imageProvider, videoProvider } from "./providers";
+import { generateText } from "./providers/text";
+import { checkPrompt, composePrompt } from "./prompts";
 
 export class QuotaError extends Error {}
 
 /** 找到某学生在「课程代码-课节序号:框体key」上的选定输出（跨课节引用） */
-async function crossLessonRef(studentId: string, ref: string): Promise<string | null> {
+async function crossLessonRef(studentId: string, ref: string) {
   const m = ref.match(/^(\w+)-(\d+):(\w+)$/);
   if (!m) return null;
   const [, code, idx, key] = m;
@@ -29,28 +32,34 @@ async function crossLessonRef(studentId: string, ref: string): Promise<string | 
     const f = await db.query.frames.findFirst({ where: and(eq(frames.workspaceId, w.id), eq(frames.key, key)) });
     if (f?.selectedGenerationId) {
       const g = await db.query.generations.findFirst({ where: eq(generations.id, f.selectedGenerationId) });
-      if (g?.outputPath) return g.outputPath;
+      if (g?.outputPath) return { frame: f, gen: g };
     }
   }
   return null;
 }
 
-/** 收集参考图：上游框体的选定输出 + 跨课节引用 */
-export async function collectRefs(frame: Frame, studentId: string, crossRefs: string[]) {
-  const out: string[] = [];
+/** 收集上游素材：图片/视频作为参考图，文字框的结果作为参考文字 */
+export async function collectInputs(frame: Frame, studentId: string, crossRefs: string[]) {
+  const refPaths: string[] = [];
+  const texts: { title: string; text: string }[] = [];
+  const take = (f: Frame, g: typeof generations.$inferSelect) => {
+    if (f.type === "TEXT") {
+      if (g.outputText) texts.push({ title: f.title, text: g.outputText });
+    } else if (g.outputPath) refPaths.push(g.outputPath);
+  };
   if (frame.upstreamFrameIds.length) {
     const ups = await db.query.frames.findMany({ where: inArray(frames.id, frame.upstreamFrameIds) });
     for (const u of ups) {
       if (!u.selectedGenerationId) continue;
       const g = await db.query.generations.findFirst({ where: eq(generations.id, u.selectedGenerationId) });
-      if (g?.outputPath) out.push(g.outputPath);
+      if (g) take(u, g);
     }
   }
   for (const r of crossRefs) {
-    const p = await crossLessonRef(studentId, r);
-    if (p) out.push(p);
+    const x = await crossLessonRef(studentId, r);
+    if (x) take(x.frame, x.gen);
   }
-  return out;
+  return { refPaths, texts };
 }
 
 export async function startGeneration(opts: {
@@ -60,10 +69,13 @@ export async function startGeneration(opts: {
   classroomId: string;
   lessonId: string;
   prompt: string;
+  blocks: PickedBlock[];
   crossRefs: string[];
 }) {
   const { frame } = opts;
   if (!opts.prompt.trim()) throw new QuotaError("提示词不能为空");
+  const bad = await checkPrompt(opts.prompt + opts.blocks.map((b) => b.text).join(""));
+  if (bad) throw new QuotaError(bad);
 
   // 1) 原子扣减：只有 used_count < max 时才 +1，防止连点刷次数
   const res = await db
@@ -73,8 +85,9 @@ export async function startGeneration(opts: {
     .returning({ used: frames.usedCount });
   if (!res.length) throw new QuotaError("这个框体的生成次数用完了，可以用备用框体继续创作");
 
-  const refPaths = await collectRefs(frame, opts.studentId, opts.crossRefs);
-  const provider = frame.type === "VIDEO" ? videoProvider() : imageProvider();
+  const { refPaths, texts } = await collectInputs(frame, opts.studentId, opts.crossRefs);
+  const composed = await composePrompt({ type: frame.type, studentPrompt: opts.prompt, blocks: opts.blocks, upstreamTexts: texts });
+  const provider = frame.type === "VIDEO" ? videoProvider() : frame.type === "IMAGE" ? imageProvider() : null;
   const [gen] = await db
     .insert(generations)
     .values({
@@ -82,34 +95,57 @@ export async function startGeneration(opts: {
       workspaceId: opts.workspaceId,
       status: "RUNNING",
       prompt: opts.prompt,
+      finalPrompt: composed.prompt,
       refPaths,
-      provider: provider.name,
-      model: provider.model,
+      provider: provider?.name ?? "claude",
+      model: provider?.model ?? (process.env.TEXT_MODEL || "claude-haiku-5-5"),
       startedAt: new Date(),
     })
     .returning();
 
   // 2) 异步执行（Node 常驻进程里跑，前端轮询状态）
-  void runGeneration(gen.id, { ...opts, refPaths, aspectRatio: frame.aspectRatio, type: frame.type });
+  void runGeneration(gen.id, { ...opts, refPaths, composed, aspectRatio: frame.aspectRatio, type: frame.type });
   return gen;
 }
 
 async function runGeneration(
   genId: string,
-  o: { frame: Frame; studentId: string; classroomId: string; lessonId: string; prompt: string; refPaths: string[]; aspectRatio: string; type: "IMAGE" | "VIDEO" },
+  o: {
+    frame: Frame;
+    studentId: string;
+    classroomId: string;
+    lessonId: string;
+    refPaths: string[];
+    composed: { prompt: string; system: string | null };
+    aspectRatio: string;
+    type: "IMAGE" | "VIDEO" | "TEXT";
+  },
 ) {
   const t0 = Date.now();
-  const provider = o.type === "VIDEO" ? videoProvider() : imageProvider();
+  const usage = { provider: "", model: "", costUsd: 0, inputTokens: 0, outputTokens: 0 };
   try {
     const refs = o.refPaths.map((p) => ({ abs: dataPath(p), mime: mimeOf(p) }));
-    const r = await provider.generate({ prompt: o.prompt, aspectRatio: o.aspectRatio, refs });
     const dir = ensureDir(dataPath("media", o.studentId));
-    const file = path.join(dir, `${nanoid(14)}.${r.ext}`);
-    fs.writeFileSync(file, r.bytes);
+    let outputPath: string, outputText: string | null = null;
+    if (o.type === "TEXT") {
+      const r = await generateText({ system: o.composed.system ?? "", prompt: o.composed.prompt, images: refs });
+      const file = path.join(dir, `${nanoid(14)}.txt`);
+      fs.writeFileSync(file, r.text);
+      outputPath = rel(file);
+      outputText = r.text;
+      Object.assign(usage, { provider: r.model === "mock-text" ? "mock" : "claude", model: r.model, costUsd: r.costUsd, inputTokens: r.inputTokens, outputTokens: r.outputTokens });
+    } else {
+      const provider = o.type === "VIDEO" ? videoProvider() : imageProvider();
+      const r = await provider.generate({ prompt: o.composed.prompt, aspectRatio: o.aspectRatio, refs });
+      const file = path.join(dir, `${nanoid(14)}.${r.ext}`);
+      fs.writeFileSync(file, r.bytes);
+      outputPath = rel(file);
+      Object.assign(usage, { provider: provider.name, model: r.model, costUsd: r.costUsd });
+    }
     const latencyMs = Date.now() - t0;
     await db
       .update(generations)
-      .set({ status: "SUCCEEDED", outputPath: rel(file), finishedAt: new Date(), latencyMs, model: r.model })
+      .set({ status: "SUCCEEDED", outputPath, outputText, finishedAt: new Date(), latencyMs, model: usage.model })
       .where(eq(generations.id, genId));
     // 还没有选定输出的框体，自动选中第一张成功的结果
     await db
@@ -121,10 +157,12 @@ async function runGeneration(
       classroomId: o.classroomId,
       lessonId: o.lessonId,
       kind: o.type,
-      provider: provider.name,
-      model: r.model,
+      provider: usage.provider,
+      model: usage.model,
       units: 1,
-      costUsd: r.costUsd,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      costUsd: usage.costUsd,
       latencyMs,
       refId: genId,
       success: true,
@@ -143,8 +181,8 @@ async function runGeneration(
       classroomId: o.classroomId,
       lessonId: o.lessonId,
       kind: o.type,
-      provider: provider.name,
-      model: provider.model,
+      provider: usage.provider || "unknown",
+      model: usage.model || "unknown",
       units: 0,
       latencyMs: Date.now() - t0,
       refId: genId,

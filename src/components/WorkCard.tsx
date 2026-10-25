@@ -8,7 +8,9 @@ export function WorkCard({ w, showStudent = true, actions }: { w: SubmissionView
   return (
     <div className="card overflow-hidden">
       <Link href={w.shareUrl} target="_blank" className="block aspect-[4/3] bg-night">
-        {w.type === "WEB" ? (
+        {w.type === "TEXT" ? (
+          <div className="h-full overflow-hidden whitespace-pre-wrap p-4 text-sm leading-relaxed text-ink/85">{w.textContent}</div>
+        ) : w.type === "WEB" ? (
           w.coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={w.coverUrl} alt={w.title} className="h-full w-full object-cover" />
@@ -28,7 +30,7 @@ export function WorkCard({ w, showStudent = true, actions }: { w: SubmissionView
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium">
             {w.title}
-            <span className="ml-1.5 text-xs font-normal text-muted">{w.type === "WEB" ? "网页" : w.type === "VIDEO" ? "视频" : "图片"}</span>
+            <span className="ml-1.5 text-xs font-normal text-muted">{w.type === "WEB" ? "网页" : w.type === "VIDEO" ? "视频" : w.type === "TEXT" ? "文字" : "图片"}</span>
           </div>
           <div className="truncate text-xs text-muted">
             {showStudent && `${w.studentName} · `}

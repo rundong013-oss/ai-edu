@@ -64,7 +64,7 @@ export default async function LessonPrep({ params }: { params: Promise<{ lessonI
                   {t.templates.map((f) => (
                     <div key={f.id} className="mt-2 rounded-lg bg-night p-3 text-sm">
                       <div className="mb-1 text-xs text-muted">
-                        {f.type === "VIDEO" ? "视频框" : "图片框"} · {f.title} · 可生成 {f.maxGenerations} 次 · 画幅 {f.aspectRatio}
+                        {f.type === "VIDEO" ? "视频框" : f.type === "TEXT" ? "文字框" : "图片框"} · {f.title} · 可生成 {f.maxGenerations} 次 · 画幅 {f.aspectRatio}
                         {f.upstreamKeys.length > 0 && ` · 参考：${f.upstreamKeys.join("、")}`}
                         {f.crossLessonRefs.length > 0 && " · 自动参考上节课作品"}
                       </div>

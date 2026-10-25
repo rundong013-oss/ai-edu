@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, KeyRound, LayoutDashboard, Users } from "lucide-react";
+import { BarChart3, BookOpen, KeyRound, LayoutDashboard, MessageSquareQuote, Users } from "lucide-react";
 import { Shell } from "@/components/Shell";
 import { requireRole } from "@/lib/auth";
 
@@ -13,6 +13,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         { href: "/admin/users", label: "账号", icon: <Users size={16} /> },
         { href: "/admin/licenses", label: "课包授权", icon: <KeyRound size={16} /> },
         { href: "/admin/courses", label: "课程与额度", icon: <BookOpen size={16} /> },
+        { href: "/admin/prompts", label: "提示词", icon: <MessageSquareQuote size={16} /> },
         { href: "/admin/usage", label: "算力用量", icon: <BarChart3 size={16} /> },
       ]}
     >

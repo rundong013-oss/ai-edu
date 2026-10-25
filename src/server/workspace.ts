@@ -15,6 +15,13 @@ import {
   type Frame,
 } from "@/db/schema";
 import { fileUrl } from "@/lib/paths";
+import { promptBlocks } from "@/db/schema";
+import { DEFAULT_BLOCK_CATEGORIES } from "./prompts";
+
+export async function enabledBlocks() {
+  const rows = await db.query.promptBlocks.findMany({ orderBy: asc(promptBlocks.sortOrder) });
+  return rows.filter((b) => b.enabled).map((b) => ({ id: b.id, category: b.category, label: b.label, text: b.text }));
+}
 
 export async function getClassroomFull(classroomId: string) {
   const room = await db.query.classrooms.findFirst({ where: eq(classrooms.id, classroomId) });
@@ -100,8 +107,10 @@ export async function getOrCreateWorkspace(classroomId: string, studentId: strin
 
 export type FrameView = Frame & {
   template: { promptTemplate: string; slots: { key: string; label: string; default: string; options?: string[] }[]; crossLessonRefs: string[] } | null;
-  generations: { id: string; status: string; url: string | null; error: string | null; createdAt: number; latencyMs: number | null }[];
+  generations: { id: string; status: string; url: string | null; text: string | null; error: string | null; createdAt: number; latencyMs: number | null }[];
   selectedUrl: string | null;
+  selectedText: string | null;
+  allowedBlockCategories: string[];
 };
 
 /** 画布需要的全部状态（前端轮询这个接口） */
@@ -129,11 +138,14 @@ export async function workspaceState(workspaceId: string) {
         id: x.id,
         status: x.status,
         url: fileUrl(x.outputPath),
+        text: x.outputText,
         error: x.error,
         createdAt: x.createdAt.getTime(),
         latencyMs: x.latencyMs,
       })),
       selectedUrl: sel ? fileUrl(sel.outputPath) : null,
+      selectedText: sel?.outputText ?? null,
+      allowedBlockCategories: tpl?.blockCategories.length ? tpl.blockCategories : DEFAULT_BLOCK_CATEGORIES[f.type],
     };
   });
 
@@ -152,6 +164,7 @@ export async function workspaceState(workspaceId: string) {
     tasks: taskList.map((t) => ({ id: t.id, order: t.order, title: t.title, description: t.description, kind: t.kind, codingPrompt: t.codingPrompt })),
     frames: frameViews,
     submittedFrameKeys: subs.filter((s) => s.frameKey).map((s) => s.frameKey!),
+    blocks: await enabledBlocks(),
   };
 }
 
@@ -184,9 +197,12 @@ export async function demoState(lessonId: string): Promise<WorkspaceState | null
       posX: tpl.posX,
       posY: tpl.posY,
       createdAt: new Date(0),
+      blocks: [],
       template: { promptTemplate: tpl.promptTemplate, slots: tpl.slots, crossLessonRefs: tpl.crossLessonRefs },
       generations: [],
       selectedUrl: null,
+      selectedText: null,
+      allowedBlockCategories: tpl.blockCategories.length ? tpl.blockCategories : DEFAULT_BLOCK_CATEGORIES[tpl.type],
     })),
   );
   return {
@@ -207,5 +223,6 @@ export async function demoState(lessonId: string): Promise<WorkspaceState | null
     tasks: taskList.map((t) => ({ id: t.id, order: t.order, title: t.title, description: t.description, kind: t.kind, codingPrompt: t.codingPrompt })),
     frames: frameViews,
     submittedFrameKeys: [],
+    blocks: await enabledBlocks(),
   };
 }

@@ -1,7 +1,7 @@
 "use client";
 import { memo, useEffect, useState } from "react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
-import { Clapperboard, ImageIcon, TriangleAlert } from "lucide-react";
+import { Clapperboard, ImageIcon, TriangleAlert, Type } from "lucide-react";
 import type { FrameView } from "@/server/workspace";
 import { NoiseField } from "@/components/NoiseField";
 import { Media } from "./Media";
@@ -38,7 +38,7 @@ export const FrameNode = memo(function FrameNode({ data, selected }: NodeProps<F
   const left = f.maxGenerations - f.usedCount;
   const done = f.generations.filter((g) => g.status === "SUCCEEDED" || g.status === "FAILED");
   const lastFailed = !running && f.generations.at(-1)?.status === "FAILED" ? f.generations.at(-1) : null;
-  const Icon = f.type === "VIDEO" ? Clapperboard : ImageIcon;
+  const Icon = f.type === "VIDEO" ? Clapperboard : f.type === "TEXT" ? Type : ImageIcon;
 
   return (
     <div
@@ -55,7 +55,7 @@ export const FrameNode = memo(function FrameNode({ data, selected }: NodeProps<F
       <Handle type="source" position={Position.Right} className="!h-3 !w-3 !border-2 !border-night !bg-spark" />
 
       <div className="flex items-center gap-2 px-3 py-2.5">
-        <Icon size={15} className={f.type === "VIDEO" ? "text-amber" : "text-spark"} />
+        <Icon size={15} className={f.type === "VIDEO" ? "text-amber" : f.type === "TEXT" ? "text-sky-300" : "text-spark"} />
         <span className="truncate text-sm font-medium">{f.title}</span>
         {taskNo !== null && <span className="text-xs text-muted">任务{taskNo}</span>}
         <span
@@ -66,8 +66,15 @@ export const FrameNode = memo(function FrameNode({ data, selected }: NodeProps<F
         </span>
       </div>
 
-      <div className="relative mx-3 overflow-hidden rounded-xl bg-night" style={{ height: (WIDTH - 24) * Math.min(ratio(f.aspectRatio), 1.4) }}>
-        {f.selectedUrl && <Media url={f.selectedUrl} type={f.type} className="h-full w-full object-cover" />}
+      <div
+        className="relative mx-3 overflow-hidden rounded-xl bg-night"
+        style={{ height: f.type === "TEXT" ? 200 : (WIDTH - 24) * Math.min(ratio(f.aspectRatio), 1.4) }}
+      >
+        {f.type === "TEXT"
+          ? f.selectedText && (
+              <div className="nowheel nodrag scroll-thin h-full overflow-y-auto whitespace-pre-wrap p-3 text-[13px] leading-relaxed text-ink/90">{f.selectedText}</div>
+            )
+          : f.selectedUrl && <Media url={f.selectedUrl} type={f.type} className="h-full w-full object-cover" />}
         {running && (
           <div className="absolute inset-0 bg-night/80">
             <NoiseField variant="render" progress={0.4} />
@@ -76,7 +83,7 @@ export const FrameNode = memo(function FrameNode({ data, selected }: NodeProps<F
             </div>
           </div>
         )}
-        {!running && !f.selectedUrl && (
+        {!running && !f.selectedUrl && !f.selectedText && (
           <div className="absolute inset-0 grid place-items-center rounded-xl border border-dashed border-line px-6 text-center text-sm text-muted">
             {readOnly ? "演示框体" : lastFailed ? "上次没生成成功，再试一次" : "点我，写下提示词"}
           </div>
@@ -98,8 +105,8 @@ export const FrameNode = memo(function FrameNode({ data, selected }: NodeProps<F
               g.id === f.selectedGenerationId ? "border-spark" : "border-line"
             }`}
           >
-            {g.status === "SUCCEEDED" && g.url ? (
-              <Media url={g.url} type={f.type} className="h-full w-full object-cover" />
+            {g.status === "SUCCEEDED" && (g.url || g.text) ? (
+              <Media url={g.url} type={f.type} text={g.text?.slice(0, 12)} className="h-full w-full object-cover !p-0.5 !text-[7px]" />
             ) : (
               <TriangleAlert size={14} className="mx-auto text-danger" />
             )}

@@ -141,7 +141,7 @@ export function CodingRoom({ workspaceId, backHref = "/student", readOnly = fals
       .catch(() => setCode("（读取失败）"));
   }, [codeFile, previewVersion, workspaceId]);
 
-  const assetsImages = useMemo(() => (state?.assets ?? []).filter((a) => a.type === "image" || a.type === "video"), [state]);
+  const assetsImages = useMemo(() => state?.assets ?? [], [state]);
 
   if (!state) return <div className="grid h-dvh place-items-center text-muted">{error ?? "正在打开项目…"}</div>;
 
@@ -243,8 +243,12 @@ export function CodingRoom({ workspaceId, backHref = "/student", readOnly = fals
                     onClick={() => insertAsset(a.file)}
                     className="h-8 w-8 overflow-hidden rounded-md border border-line hover:border-spark"
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={`/preview/${workspaceId}/${a.file}`} alt={a.title} className="h-full w-full object-cover" />
+                    {a.type === "text" ? (
+                      <span className="grid h-full w-full place-items-center bg-raised text-xs">文</span>
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={`/preview/${workspaceId}/${a.file}`} alt={a.title} className="h-full w-full object-cover" />
+                    )}
                   </button>
                 ))}
               </div>

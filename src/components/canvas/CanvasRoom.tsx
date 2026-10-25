@@ -13,7 +13,7 @@ import {
   type NodeChange,
 } from "@xyflow/react";
 import Link from "next/link";
-import { Check, ChevronLeft, Clapperboard, ImageIcon, Send } from "lucide-react";
+import { Check, ChevronLeft, Clapperboard, ImageIcon, Send, Type } from "lucide-react";
 import type { WorkspaceState } from "@/server/workspace";
 import { FrameNode, type FrameNodeType } from "./FrameNode";
 import { PromptEditor } from "./PromptEditor";
@@ -85,7 +85,14 @@ function CanvasInner({
       setState({
         ...state,
         frames: state.frames.map((f) =>
-          f.id === frameId ? { ...f, selectedGenerationId: genId, selectedUrl: f.generations.find((g) => g.id === genId)?.url ?? null } : f,
+          f.id === frameId
+            ? {
+                ...f,
+                selectedGenerationId: genId,
+                selectedUrl: f.generations.find((g) => g.id === genId)?.url ?? null,
+                selectedText: f.generations.find((g) => g.id === genId)?.text ?? null,
+              }
+            : f,
         ),
       });
       await api(`/api/frames/${frameId}`, "PATCH", { selectedGenerationId: genId }).catch((e) => flash(e.message));
@@ -115,7 +122,7 @@ function CanvasInner({
       source: u,
       target: f.id,
       animated: f.generations.some((g) => g.status === "RUNNING"),
-      style: { stroke: byId.get(u)?.selectedUrl ? "var(--spark)" : "var(--line)", strokeWidth: 2 },
+      style: { stroke: byId.get(u)?.selectedUrl || byId.get(u)?.selectedText ? "var(--spark)" : "var(--line)", strokeWidth: 2 },
     })),
   );
 
@@ -148,7 +155,7 @@ function CanvasInner({
     }
   };
 
-  const addSpare = async (type: "IMAGE" | "VIDEO") => {
+  const addSpare = async (type: "IMAGE" | "VIDEO" | "TEXT") => {
     const center = rf.screenToFlowPosition({ x: window.innerWidth / 2 + 80, y: window.innerHeight / 2 - 150 });
     try {
       const f = await api<{ id: string }>(`/api/workspaces/${state.workspace.id}/frames`, "POST", { type, posX: center.x, posY: center.y });
@@ -235,14 +242,18 @@ function CanvasInner({
                 剩 {spareLeft}/{state.lesson.spareFrames}
               </span>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-1.5">
               <button className="btn btn-sm" disabled={!live || spareLeft <= 0} onClick={() => addSpare("IMAGE")}>
                 <ImageIcon size={14} />
-                图片框
+                图片
               </button>
               <button className="btn btn-sm" disabled={!live || spareLeft <= 0} onClick={() => addSpare("VIDEO")}>
                 <Clapperboard size={14} />
-                视频框
+                视频
+              </button>
+              <button className="btn btn-sm" disabled={!live || spareLeft <= 0} onClick={() => addSpare("TEXT")}>
+                <Type size={14} />
+                文字
               </button>
             </div>
             <p className="mt-2 text-xs leading-relaxed text-muted">每个框体只能生成几次。想清楚再点生成，比多抽几次更重要。</p>
@@ -278,14 +289,15 @@ function CanvasInner({
                 <PromptEditor
                   frame={selected}
                   upstream={selected.upstreamFrameIds.map((u) => byId.get(u)!).filter(Boolean)}
+                  blocksLib={state.blocks}
                   canGenerate={live}
                   blockedReason={blockedReason}
                   onClose={() => setSelectedId(null)}
                   onDraft={(patch) => {
                     if (!readOnly) api(`/api/frames/${selected.id}`, "PATCH", patch).catch(() => {});
                   }}
-                  onGenerate={async (prompt, slotValues) => {
-                    await api(`/api/frames/${selected.id}/generate`, "POST", { prompt, slotValues });
+                  onGenerate={async (prompt, slotValues, blockIds) => {
+                    await api(`/api/frames/${selected.id}/generate`, "POST", { prompt, slotValues, blockIds });
                     await refresh();
                   }}
                 />

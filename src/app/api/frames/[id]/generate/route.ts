@@ -4,6 +4,7 @@ import { frameTemplates, frames } from "@/db/schema";
 import { apiSession, jsonError } from "@/lib/auth";
 import { loadFrameFor } from "@/server/access";
 import { QuotaError, startGeneration } from "@/server/generation";
+import { DEFAULT_BLOCK_CATEGORIES, resolveBlocks } from "@/server/prompts";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const s = await apiSession("STUDENT");
@@ -13,9 +14,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!r) return jsonError(404, "找不到框体");
   if (r.room.status !== "LIVE") return jsonError(403, "老师还没开课，或者这节课已经结束了");
 
-  const { prompt, slotValues } = (await req.json()) as { prompt: string; slotValues?: Record<string, string> };
-  await db.update(frames).set({ prompt, ...(slotValues ? { slotValues } : {}) }).where(eq(frames.id, id));
+  const { prompt, slotValues, blockIds = [] } = (await req.json()) as { prompt: string; slotValues?: Record<string, string>; blockIds?: string[] };
   const tpl = r.frame.templateId ? await db.query.frameTemplates.findFirst({ where: eq(frameTemplates.id, r.frame.templateId) }) : null;
+  const allowed = tpl?.blockCategories.length ? tpl.blockCategories : DEFAULT_BLOCK_CATEGORIES[r.frame.type];
+  const blocks = await resolveBlocks(blockIds, allowed);
+  await db.update(frames).set({ prompt, blocks, ...(slotValues ? { slotValues } : {}) }).where(eq(frames.id, id));
   try {
     const gen = await startGeneration({
       frame: r.frame,
@@ -24,6 +27,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       classroomId: r.room.id,
       lessonId: r.room.lessonId,
       prompt,
+      blocks,
       crossRefs: tpl?.crossLessonRefs ?? [],
     });
     return Response.json({ id: gen.id });

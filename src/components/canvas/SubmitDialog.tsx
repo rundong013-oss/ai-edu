@@ -16,7 +16,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
 }
 
 export function SubmitDialog({ state, onClose, onDone }: { state: WorkspaceState; onClose: () => void; onDone: (n: number) => void }) {
-  const ready = state.frames.filter((f) => f.selectedUrl);
+  const ready = state.frames.filter((f) => f.selectedUrl || f.selectedText);
   const [picked, setPicked] = useState<Set<string>>(new Set(ready.filter((f) => !state.submittedFrameKeys.includes(f.key)).map((f) => f.id)));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -42,7 +42,7 @@ export function SubmitDialog({ state, onClose, onDone }: { state: WorkspaceState
                   }}
                   className={`overflow-hidden rounded-xl border text-left ${on ? "border-spark" : "border-line opacity-60"}`}
                 >
-                  <Media url={f.selectedUrl!} type={f.type} className="aspect-square w-full object-cover" />
+                  <Media url={f.selectedUrl} type={f.type} text={f.selectedText} className="aspect-square w-full object-cover" />
                   <div className="truncate px-2 py-1.5 text-xs">
                     {f.title}
                     {state.submittedFrameKeys.includes(f.key) && <span className="ml-1 text-spark">已提交</span>}

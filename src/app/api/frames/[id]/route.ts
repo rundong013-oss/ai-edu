@@ -3,6 +3,8 @@ import { db } from "@/db";
 import { frames, generations } from "@/db/schema";
 import { apiSession, jsonError } from "@/lib/auth";
 import { loadFrameFor } from "@/server/access";
+import { frameTemplates } from "@/db/schema";
+import { DEFAULT_BLOCK_CATEGORIES, resolveBlocks } from "@/server/prompts";
 
 /** 保存框体：位置、提示词、字段值、选定的输出、手动连线 */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -19,6 +21,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     selectedGenerationId: string;
     upstreamFrameIds: string[];
     aspectRatio: string;
+    blockIds: string[];
   }>;
   const patch: Partial<typeof frames.$inferInsert> = {};
   if (typeof body.posX === "number") patch.posX = body.posX;
@@ -26,6 +29,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (typeof body.prompt === "string") patch.prompt = body.prompt.slice(0, 2000);
   if (body.slotValues) patch.slotValues = body.slotValues;
   if (body.aspectRatio && r.frame.isSpare) patch.aspectRatio = body.aspectRatio;
+  if (body.blockIds) {
+    const tpl = r.frame.templateId ? await db.query.frameTemplates.findFirst({ where: eq(frameTemplates.id, r.frame.templateId) }) : null;
+    patch.blocks = await resolveBlocks(body.blockIds, tpl?.blockCategories.length ? tpl.blockCategories : DEFAULT_BLOCK_CATEGORIES[r.frame.type]);
+  }
   if (body.selectedGenerationId) {
     const g = await db.query.generations.findFirst({ where: eq(generations.id, body.selectedGenerationId) });
     if (!g || g.frameId !== id || g.status !== "SUCCEEDED") return jsonError(400, "只能选择这个框体里生成成功的结果");

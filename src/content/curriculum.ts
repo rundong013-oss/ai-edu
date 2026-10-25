@@ -5,7 +5,7 @@ import type { Slot } from "@/db/schema";
 
 export type FrameDef = {
   key: string;
-  type: "IMAGE" | "VIDEO";
+  type: "IMAGE" | "VIDEO" | "TEXT";
   title: string;
   promptTemplate: string;
   slots: Slot[];
@@ -13,6 +13,7 @@ export type FrameDef = {
   maxGenerations?: number;
   upstreamKeys?: string[];
   crossLessonRefs?: string[];
+  blockCategories?: string[]; // 开放哪些积木类别；不填按框体类型默认
   pos: [number, number];
 };
 
@@ -121,6 +122,27 @@ const lesson1: LessonDef = {
           aspectRatio: "3:4",
           upstreamKeys: ["mech", "pet"],
           pos: [440, 260],
+        },
+      ],
+    },
+    {
+      title: "任务四：写角色档案",
+      description: "让 AI 看着你的战甲兽，帮它写一份角色档案。下节课做图鉴网页时会用到！",
+      kind: "CANVAS",
+      frames: [
+        {
+          key: "profile",
+          type: "TEXT",
+          title: "角色档案框",
+          promptTemplate: "看着参考图里的战甲兽，给它写一份角色档案：它叫「{{name}}」，性格{{personality}}，最厉害的本领是{{power}}。写出它的来历和一个小故事，150 字左右",
+          slots: [
+            { key: "name", label: "名字", default: "星光战甲兽" },
+            { key: "personality", label: "性格", default: "勇敢又有点调皮", options: ["勇敢又有点调皮", "沉稳可靠", "热情冲动", "聪明爱思考"] },
+            { key: "power", label: "本领", default: "星辰爆裂爪" },
+          ],
+          maxGenerations: 3,
+          upstreamKeys: ["fusion"],
+          pos: [880, 260],
         },
       ],
     },

@@ -58,7 +58,19 @@ function systemPrompt(dir: string) {
   let assets = "（暂无素材）";
   try {
     const list = JSON.parse(fs.readFileSync(path.join(dir, "assets", "assets.json"), "utf8")) as { file: string; type: string; title: string; from: string }[];
-    if (list.length) assets = list.map((a) => `- ${a.file}（${a.type === "video" ? "视频" : "图片"}：${a.title}${a.from ? "，来自" + a.from : ""}）`).join("\n");
+    if (list.length)
+      assets = list
+        .map((a) => {
+          const head = `- ${a.file}（${a.type === "video" ? "视频" : a.type === "text" ? "文字" : "图片"}：${a.title}${a.from ? "，来自" + a.from : ""}）`;
+          if (a.type !== "text") return head;
+          // 文字素材直接把内容给模型，省一次读取
+          let body = "";
+          try {
+            body = fs.readFileSync(path.join(dir, a.file), "utf8").slice(0, 600);
+          } catch {}
+          return `${head}\n  内容：${body.replace(/\n/g, " ")}`;
+        })
+        .join("\n");
   } catch {}
   const files = fs
     .readdirSync(dir)
@@ -68,7 +80,7 @@ function systemPrompt(dir: string) {
 
 ## 当前项目
 工作目录就是项目根目录。现有文件：${files}。
-学生可用的素材（已经在项目里，直接用相对路径引用；SVG 素材也当作普通图片用 <img> 显示）：
+学生可用的素材（已经在项目里，图片/视频直接用相对路径引用，SVG 也当普通图片用 <img> 显示；文字素材可以直接把内容写进网页）：
 ${assets}
 
 ## 工作方式
