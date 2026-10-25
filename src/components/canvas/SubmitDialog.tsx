@@ -61,6 +61,7 @@ export function SubmitDialog({ state, onClose, onDone }: { state: WorkspaceState
         <button
           className="btn btn-spark"
           disabled={busy || picked.size === 0}
+          aria-busy={busy}
           onClick={async () => {
             setBusy(true);
             try {

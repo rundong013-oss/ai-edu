@@ -9,7 +9,7 @@ import { WorkCard } from "@/components/WorkCard";
 export function LivePanel({ initial }: { initial: ClassroomLive }) {
   const router = useRouter();
   const [d, setD] = useState(initial);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
   const id = d.room.id;
 
   useEffect(() => {
@@ -21,12 +21,12 @@ export function LivePanel({ initial }: { initial: ClassroomLive }) {
   }, [id]);
 
   const act = async (action: string, extra: object = {}) => {
-    setBusy(true);
+    setBusy(action === "spotlight" ? `spotlight:${(extra as { submissionId?: string }).submissionId ?? "off"}` : action);
     const r = await fetch(`/api/classrooms/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, ...extra }) });
     if (!r.ok) alert((await r.json()).error);
     const l = await fetch(`/api/classrooms/${id}/live`, { cache: "no-store" });
     if (l.ok) setD(await l.json());
-    setBusy(false);
+    setBusy(null);
   };
 
   const canvas = d.lesson.kind === "CANVAS";
@@ -49,7 +49,7 @@ export function LivePanel({ initial }: { initial: ClassroomLive }) {
         </div>
         <div className="flex gap-2">
           {canvas && (
-            <Link href={`/teacher/demo/${d.lesson.id}`} target="_blank" className="btn">
+            <Link href={`/teacher/demo/${d.lesson.id}?tab=1`} target="_blank" className="btn">
               <Presentation size={15} />
               演示画布
             </Link>
@@ -60,27 +60,28 @@ export function LivePanel({ initial }: { initial: ClassroomLive }) {
           </Link>
           {status === "READY" && (
             <>
-              <button className="btn btn-ghost" disabled={busy} onClick={async () => {
+              <button className="btn btn-ghost" disabled={!!busy} aria-busy={busy === "delete"} onClick={async () => {
                 if (!confirm("删除这个课堂？")) return;
+                setBusy("delete");
                 await fetch(`/api/classrooms/${id}`, { method: "DELETE" });
                 router.push("/teacher");
               }}>
                 <Trash2 size={15} />
               </button>
-              <button className="btn btn-spark" disabled={busy} onClick={() => act("start")}>
+              <button className="btn btn-spark" disabled={!!busy} aria-busy={busy === "start"} onClick={() => act("start")}>
                 <Play size={15} />
                 开课
               </button>
             </>
           )}
           {status === "LIVE" && (
-            <button className="btn" disabled={busy} onClick={() => confirm("下课后学生不能再生成，确定？") && act("end")}>
+            <button className="btn" disabled={!!busy} aria-busy={busy === "end"} onClick={() => confirm("下课后学生不能再生成，确定？") && act("end")}>
               <Square size={14} />
               下课
             </button>
           )}
           {status === "ENDED" && (
-            <button className="btn" disabled={busy} onClick={() => act("reopen")}>
+            <button className="btn" disabled={!!busy} aria-busy={busy === "reopen"} onClick={() => act("reopen")}>
               <Play size={15} />
               重新开课
             </button>
@@ -117,7 +118,7 @@ export function LivePanel({ initial }: { initial: ClassroomLive }) {
               <div className="mt-3 flex items-center justify-between text-xs text-muted">
                 <span className="font-mono">{canvas ? `已生成 ${s.generationsUsed} 次` : ""}</span>
                 {s.workspaceId && (
-                  <Link href={`/teacher/view/${s.workspaceId}`} target="_blank" className="btn btn-ghost btn-sm">
+                  <Link href={`/teacher/view/${s.workspaceId}?tab=1`} target="_blank" className="btn btn-ghost btn-sm">
                     {canvas ? <Eye size={14} /> : <Code2 size={14} />}
                     查看
                   </Link>
@@ -140,7 +141,11 @@ export function LivePanel({ initial }: { initial: ClassroomLive }) {
                 key={w.id}
                 w={w}
                 actions={
-                  <button className={`btn btn-sm ${on ? "btn-spark" : ""}`} onClick={() => act("spotlight", { submissionId: on ? null : w.id })}>
+                  <button
+                    className={`btn btn-sm ${on ? "btn-spark" : ""}`}
+                    aria-busy={busy === `spotlight:${on ? "off" : w.id}`}
+                    onClick={() => act("spotlight", { submissionId: on ? null : w.id })}
+                  >
                     <MonitorUp size={13} />
                     {on ? "投屏中" : "投屏"}
                   </button>

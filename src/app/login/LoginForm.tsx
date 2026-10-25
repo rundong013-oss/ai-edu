@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { NoiseField } from "@/components/NoiseField";
 import { BRAND } from "@/lib/brand";
+import { startNav } from "@/components/NavProgress";
 
 const DEMO = [
   { label: "学生", username: "stu1" },
@@ -29,6 +30,7 @@ export function LoginForm({ showDemo }: { showDemo: boolean }) {
       setBusy(false);
       return;
     }
+    startNav();
     window.location.href = j.home;
   }
 
@@ -63,7 +65,7 @@ export function LoginForm({ showDemo }: { showDemo: boolean }) {
             <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
           </label>
           {err && <p className="text-sm text-danger">{err}</p>}
-          <button className="btn btn-spark w-full" disabled={busy}>
+          <button className="btn btn-spark w-full" disabled={busy} aria-busy={busy}>
             {busy ? "登录中…" : "登录"}
           </button>
         </form>

@@ -26,7 +26,7 @@ export function RuleEditor({ k, title, desc, value }: { k: string; title: string
         <button className="btn btn-ghost btn-sm" onClick={async () => { await save({ reset: true }); window.location.reload(); }}>
           恢复默认
         </button>
-        <button className="btn btn-sm" disabled={state === "saving" || v === value} onClick={() => save({ value: v })}>
+        <button className="btn btn-sm" disabled={state === "saving" || v === value} aria-busy={state === "saving"} onClick={() => save({ value: v })}>
           保存
         </button>
       </div>

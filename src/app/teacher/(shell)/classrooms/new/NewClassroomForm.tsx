@@ -113,7 +113,7 @@ export function NewClassroomForm({ courses, students }: { courses: C[]; students
 
       {err && <p className="text-sm text-danger">{err}</p>}
       <div>
-        <button className="btn btn-spark" disabled={busy || !lessonId}>
+        <button className="btn btn-spark" disabled={busy || !lessonId} aria-busy={busy}>
           创建课堂
         </button>
       </div>

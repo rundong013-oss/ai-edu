@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { BRAND } from "@/lib/brand";
+import { Suspense } from "react";
+import { NavTracker } from "@/components/NavTracker";
+import { NavProgress } from "@/components/NavProgress";
 
 export const metadata: Metadata = {
   title: BRAND.name,
@@ -10,7 +13,13 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="zh-CN">
-      <body className="min-h-dvh">{children}</body>
+      <body className="min-h-dvh">
+        <NavTracker />
+        <Suspense>
+          <NavProgress />
+        </Suspense>
+        {children}
+      </body>
     </html>
   );
 }

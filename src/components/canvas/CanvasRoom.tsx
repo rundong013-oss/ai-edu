@@ -12,8 +12,9 @@ import {
   type Edge,
   type NodeChange,
 } from "@xyflow/react";
-import Link from "next/link";
-import { Check, ChevronLeft, Clapperboard, ImageIcon, Send, Type } from "lucide-react";
+import { BackButton } from "@/components/BackButton";
+import { PageLoading } from "@/components/PageLoading";
+import { Check, Clapperboard, ImageIcon, Send, Type } from "lucide-react";
 import type { WorkspaceState } from "@/server/workspace";
 import { FrameNode, type FrameNodeType } from "./FrameNode";
 import { PromptEditor } from "./PromptEditor";
@@ -25,7 +26,7 @@ const nodeTypes = { frame: FrameNode };
 export function CanvasRoom({ workspaceId, backHref = "/student", readOnly = false, viewerNote }: { workspaceId: string; backHref?: string; readOnly?: boolean; viewerNote?: string }) {
   const { state, setState, error, refresh } = useWorkspace(workspaceId);
   if (!state) {
-    return <div className="grid h-dvh place-items-center text-muted">{error ?? "正在打开画布…"}</div>;
+    return error ? <div className="grid h-dvh place-items-center text-muted">{error}</div> : <PageLoading full text="正在打开画布…" />;
   }
   return (
     <ReactFlowProvider>
@@ -176,9 +177,7 @@ function CanvasInner({
     <div className="flex h-dvh flex-col">
       {/* 顶栏 */}
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-panel px-4">
-        <Link href={backHref} className="btn btn-ghost btn-sm" aria-label="返回">
-          <ChevronLeft size={16} />
-        </Link>
+        <BackButton fallback={backHref} />
         <div className="min-w-0">
           <div className="truncate text-sm font-medium">
             {state.lesson.courseCode} 第 {state.lesson.index} 节 · {state.lesson.title}

@@ -24,6 +24,7 @@ export function ApiButton({
     <button
       className={className}
       disabled={busy}
+      aria-busy={busy}
       onClick={async () => {
         if (confirm && !window.confirm(confirm)) return;
         setBusy(true);

@@ -14,6 +14,7 @@ export function ResetPasswordButton({ id, name }: { id: string; name: string }) 
     <button
       className="btn btn-ghost btn-sm"
       disabled={busy}
+      aria-busy={busy}
       onClick={async () => {
         if (!confirm(`给 ${name} 生成一个新密码？旧密码会立即失效。`)) return;
         setBusy(true);

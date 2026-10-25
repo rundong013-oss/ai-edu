@@ -67,8 +67,54 @@ body {
   border: 1px solid var(--line);
   background: var(--raised);
   color: var(--ink);
-  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s, transform 0.08s;
   white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+/* 按下去的反馈 */
+.btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+a.card:active,
+button.card:active {
+  transform: scale(0.99);
+}
+a.card,
+button.card {
+  transition: transform 0.08s, border-color 0.15s, background 0.15s;
+}
+
+/* 等待中：点了要跳转的链接（data-pending）或正在请求服务器的按钮（aria-busy）前面出现转圈 */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.btn[data-pending]::before,
+.btn[aria-busy="true"]::before,
+a[data-pending] .btn::before {
+  content: "";
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: spin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+.btn[data-pending],
+.btn[aria-busy="true"],
+a[data-pending] {
+  pointer-events: none;
+}
+.btn[data-pending] svg,
+.btn[aria-busy="true"] svg,
+a[data-pending] .btn svg {
+  display: none;
+}
+a[data-pending]:not(.btn) {
+  opacity: 0.75;
 }
 .btn:hover:not(:disabled) {
   border-color: #3a4642;

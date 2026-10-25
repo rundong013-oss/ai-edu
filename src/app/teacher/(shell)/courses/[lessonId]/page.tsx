@@ -38,7 +38,7 @@ export default async function LessonPrep({ params }: { params: Promise<{ lessonI
         desc={`${course?.title} · ${lesson.subtitle} · ${lesson.durationMin} 分钟 · ${lesson.kind === "CANVAS" ? "画布课" : "Vibe Coding 课"}`}
         actions={
           lesson.kind === "CANVAS" ? (
-            <Link href={`/teacher/demo/${lesson.id}`} target="_blank" className="btn btn-spark">
+            <Link href={`/teacher/demo/${lesson.id}?tab=1`} target="_blank" className="btn btn-spark">
               <Presentation size={15} />
               打开演示画布
             </Link>

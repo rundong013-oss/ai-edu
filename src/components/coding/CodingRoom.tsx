@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import { BackButton } from "@/components/BackButton";
+import { PageLoading } from "@/components/PageLoading";
 import {
   Check,
-  ChevronLeft,
   CircleDashed,
   Code2,
   ExternalLink,
@@ -143,7 +143,7 @@ export function CodingRoom({ workspaceId, backHref = "/student", readOnly = fals
 
   const assetsImages = useMemo(() => state?.assets ?? [], [state]);
 
-  if (!state) return <div className="grid h-dvh place-items-center text-muted">{error ?? "正在打开项目…"}</div>;
+  if (!state) return error ? <div className="grid h-dvh place-items-center text-muted">{error}</div> : <PageLoading full text="正在打开项目…" />;
 
   const live = state.classroom.status === "LIVE";
   const left = state.lesson.maxTurns - state.workspace.turnsUsed;
@@ -168,9 +168,7 @@ export function CodingRoom({ workspaceId, backHref = "/student", readOnly = fals
   return (
     <div className="flex h-dvh flex-col">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-panel px-4">
-        <Link href={backHref} className="btn btn-ghost btn-sm" aria-label="返回">
-          <ChevronLeft size={16} />
-        </Link>
+        <BackButton fallback={backHref} />
         <div className="min-w-0">
           <div className="truncate text-sm font-medium">
             {state.lesson.courseCode} 第 {state.lesson.index} 节 · {state.lesson.title}
@@ -409,6 +407,7 @@ function WebSubmitDialog({
         <button
           className="btn btn-spark"
           disabled={busy || !title.trim()}
+          aria-busy={busy}
           onClick={async () => {
             setBusy(true);
             const r = await fetch(`/api/workspaces/${workspaceId}/submit`, {

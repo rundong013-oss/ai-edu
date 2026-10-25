@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { BackButton } from "@/components/BackButton";
+import { PageLoading } from "@/components/PageLoading";
 import { NoiseField } from "@/components/NoiseField";
 import { CanvasRoom } from "@/components/canvas/CanvasRoom";
 import { CodingRoom } from "@/components/coding/CodingRoom";
@@ -22,6 +22,8 @@ export function RoomGate({
 }) {
   const [ws, setWs] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  // 先尝试进入；只有确认「还没开课」才显示等待页，避免已开课时闪一下等待画面
+  const [waiting, setWaiting] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -32,6 +34,7 @@ export function RoomGate({
       if (!alive) return;
       if (r.ok) setWs(j.workspaceId);
       else {
+        setWaiting(true);
         setMsg(r.status === 409 ? null : j.error);
         t = setTimeout(tryEnter, 3000);
       }
@@ -44,16 +47,16 @@ export function RoomGate({
   }, [classroomId]);
 
   if (ws) return kind === "CODING" ? <CodingRoom workspaceId={ws} /> : <CanvasRoom workspaceId={ws} />;
+  if (!waiting) return <PageLoading full text="正在进入课堂…" />;
 
   return (
     <main className="relative grid min-h-dvh place-items-center overflow-hidden">
       <div className="absolute inset-0 opacity-70">
         <NoiseField variant="ambient" density={0.7} />
       </div>
-      <Link href="/student" className="btn btn-ghost btn-sm absolute left-4 top-4">
-        <ChevronLeft size={16} />
-        返回
-      </Link>
+      <div className="absolute left-4 top-4">
+        <BackButton fallback="/student" label="返回" />
+      </div>
       <div className="relative text-center">
         <p className="text-sm text-muted">{roomName}</p>
         <h1 className="mt-2 text-3xl font-semibold">{title}</h1>
