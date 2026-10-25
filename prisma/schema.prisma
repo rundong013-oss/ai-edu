@@ -1,0 +1,297 @@
+// AI 教学一体化平台 — 数据模型
+// 层级：Course(课包) → Lesson(课节) → Task(任务) → FrameTemplate(框体模板)
+// 运行时：Classroom(课堂) → Workspace(学生在某课堂的工作区) → Frame(框体实例) → Generation(一次生成)
+// 额度以课节为单位：每个框体 maxGenerations 次；每节课 spareFrames 个备用框体；Vibe Coding 按轮数限制。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- 账号 ----------
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  name         String
+  role         String // ADMIN | TEACHER | STUDENT
+  disabled     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  licenses          License[]          @relation("LicenseStudent")
+  grantedLicenses   License[]          @relation("LicenseGrantor")
+  teachingRooms     Classroom[]
+  classroomStudents ClassroomStudent[]
+  workspaces        Workspace[]
+  submissions       Submission[]
+  usage             UsageRecord[]
+}
+
+// ---------- 课程内容 ----------
+
+model Course {
+  id          String   @id @default(cuid())
+  code        String   @unique // S1 / S2 / S3
+  title       String
+  description String   @default("")
+  level       Int
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  lessons    Lesson[]
+  licenses   License[]
+  classrooms Classroom[]
+}
+
+model Lesson {
+  id          String  @id @default(cuid())
+  courseId    String
+  course      Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  index       Int // 1..16
+  title       String
+  subtitle    String  @default("")
+  kind        String // CANVAS | CODING
+  ready       Boolean @default(false) // 内容是否已设计好（未就绪的课节只显示占位）
+  durationMin Int     @default(90)
+  objectives  String  @default("") // 知识/能力/情感目标（markdown）
+  pptUrl      String? // 占位
+  lessonPlan  String  @default("") // 教案（markdown，占位）
+
+  // 额度配置
+  spareFrames     Int     @default(2) // 画布：备用框体个数
+  codingMaxTurns  Int     @default(12) // Vibe Coding：本节最多对话轮数
+  codingModel     String  @default("") // 为空则用全局默认
+  codingScaffold  String  @default("") // 脚手架模板 id（content/scaffolds/<id>）
+  codingPresets   String  @default("[]") // JSON: [{title, prompt}]
+  codingClaudeMd  String  @default("") // 课节专用 CLAUDE.md 追加内容
+
+  tasks      Task[]
+  classrooms Classroom[]
+
+  @@unique([courseId, index])
+}
+
+model Task {
+  id          String  @id @default(cuid())
+  lessonId    String
+  lesson      Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  order       Int
+  title       String
+  description String  @default("")
+  kind        String // CANVAS | CODING | FREE
+  codingPrompt String @default("") // CODING 任务的预设提示词
+
+  frames FrameTemplate[]
+}
+
+model FrameTemplate {
+  id             String @id @default(cuid())
+  taskId         String
+  task           Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  key            String // 课节内唯一，用于连线引用，如 "mech"
+  order          Int    @default(0)
+  type           String // IMAGE | VIDEO
+  title          String
+  promptTemplate String // 含 {{slot}} 占位
+  slots          String @default("[]") // JSON: [{key,label,default,options?}]
+  aspectRatio    String @default("1:1")
+  maxGenerations Int    @default(3)
+  upstreamKeys   String @default("[]") // JSON: ["mech","pet"] 以这些框体的选定输出为参考
+  // 跨课节引用：从同一学生在某课节的选定作品取参考，如 "S1-1:fusion"
+  crossLessonRefs String @default("[]")
+  posX           Float  @default(0)
+  posY           Float  @default(0)
+
+  frames Frame[]
+}
+
+// ---------- 授权与课堂 ----------
+
+model License {
+  id          String   @id @default(cuid())
+  studentId   String
+  student     User     @relation("LicenseStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  grantedById String?
+  grantedBy   User?    @relation("LicenseGrantor", fields: [grantedById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@unique([studentId, courseId])
+}
+
+model Classroom {
+  id        String    @id @default(cuid())
+  name      String
+  teacherId String
+  teacher   User      @relation(fields: [teacherId], references: [id])
+  courseId  String
+  course    Course    @relation(fields: [courseId], references: [id])
+  lessonId  String
+  lesson    Lesson    @relation(fields: [lessonId], references: [id])
+  status    String    @default("READY") // READY | LIVE | ENDED
+  spotlightSubmissionId String? // 老师投屏展示的作品
+  startedAt DateTime?
+  endedAt   DateTime?
+  createdAt DateTime  @default(now())
+
+  students    ClassroomStudent[]
+  workspaces  Workspace[]
+  submissions Submission[]
+}
+
+model ClassroomStudent {
+  classroomId String
+  classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  addedAt     DateTime  @default(now())
+
+  @@id([classroomId, studentId])
+}
+
+// ---------- 学生工作区（一个学生在一个课堂里的全部状态） ----------
+
+model Workspace {
+  id           String    @id @default(cuid())
+  classroomId  String
+  classroom    Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  currentTaskId String?
+  canvasState  String    @default("{}") // JSON: 视口、边（用户手动连线）
+  spareUsed    Int       @default(0)
+  // Vibe Coding
+  agentSessionId String?
+  codingTurnsUsed Int    @default(0)
+  codingBusy     Boolean @default(false)
+  lastActiveAt DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+
+  frames      Frame[]
+  generations Generation[]
+  messages    CodingMessage[]
+  runs        AgentRun[]
+  submissions Submission[]
+
+  @@unique([classroomId, studentId])
+}
+
+model Frame {
+  id            String         @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  templateId    String?
+  template      FrameTemplate? @relation(fields: [templateId], references: [id])
+  taskId        String? // 所属任务（备用框体为 null）
+  key           String
+  type          String // IMAGE | VIDEO
+  title         String
+  isSpare       Boolean        @default(false)
+  prompt        String         @default("")
+  slotValues    String         @default("{}")
+  aspectRatio   String         @default("1:1")
+  upstreamFrameIds String      @default("[]") // JSON
+  maxGenerations Int
+  usedCount     Int            @default(0)
+  selectedGenerationId String?
+  posX          Float          @default(0)
+  posY          Float          @default(0)
+  createdAt     DateTime       @default(now())
+
+  generations Generation[]
+}
+
+model Generation {
+  id          String    @id @default(cuid())
+  frameId     String
+  frame       Frame     @relation(fields: [frameId], references: [id], onDelete: Cascade)
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  status      String    @default("QUEUED") // QUEUED | RUNNING | SUCCEEDED | FAILED
+  prompt      String
+  refPaths    String    @default("[]") // JSON：参考图（相对 data/ 的路径）
+  provider    String
+  model       String
+  outputPath  String? // 相对 data/ 的路径
+  error       String?
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  latencyMs   Int?
+}
+
+// ---------- Vibe Coding ----------
+
+model CodingMessage {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  runId       String?
+  role        String // user | assistant | tool | system
+  content     String // JSON（按 role 不同）
+  createdAt   DateTime  @default(now())
+}
+
+model AgentRun {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  prompt         String
+  status         String    @default("RUNNING") // RUNNING | DONE | ERROR | STOPPED
+  model          String
+  provider       String // claude | mock
+  inputTokens    Int       @default(0)
+  outputTokens   Int       @default(0)
+  costUsd        Float     @default(0)
+  numTurns       Int       @default(0)
+  ttftMs         Int? // 首个流式输出
+  firstPreviewMs Int? // 首次文件写入（预览可见）
+  totalMs        Int?
+  error          String?
+  createdAt      DateTime  @default(now())
+}
+
+// ---------- 作品与用量 ----------
+
+model Submission {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classroomId String
+  classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  type        String // IMAGE | VIDEO | WEB
+  title       String
+  // IMAGE/VIDEO：文件路径；WEB：快照目录（相对 data/）
+  path        String
+  coverPath   String?
+  frameKey    String? // 来自哪个框体（画布作品）
+  shareToken  String    @unique
+  createdAt   DateTime  @default(now())
+}
+
+model UsageRecord {
+  id           String   @id @default(cuid())
+  studentId    String
+  student      User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classroomId  String
+  lessonId     String
+  kind         String // IMAGE | VIDEO | CODING
+  provider     String
+  model        String
+  units        Int      @default(1) // 图片张数 / 视频条数 / 对话轮数
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  costUsd      Float    @default(0)
+  latencyMs    Int?
+  refId        String? // Generation.id / AgentRun.id
+  success      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+}
