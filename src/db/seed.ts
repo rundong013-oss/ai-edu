@@ -48,17 +48,20 @@ async function seedCurriculum() {
       if (lesson) await db.update(lessons).set(fields).where(eq(lessons.id, lesson.id));
       else [lesson] = await db.insert(lessons).values({ ...fields, courseId: course!.id, index: l.index }).returning();
 
-      // 任务和框体模板整体替换（已开课的框体实例保存了自己的副本，不受影响）
-      await db.delete(tasks).where(eq(tasks.lessonId, lesson!.id));
-      for (const [ti, t] of (l.tasks ?? []).entries()) {
-        const [task] = await db
-          .insert(tasks)
-          .values({ lessonId: lesson!.id, order: ti, title: t.title, description: t.description, kind: t.kind, codingPrompt: t.codingPrompt ?? "" })
-          .returning();
+      // 任务按序号、框体模板按 key 原地更新：已有工作区里框体的 taskId / templateId 不会失效
+      const defs = l.tasks ?? [];
+      const oldTasks = await db.query.tasks.findMany({ where: eq(tasks.lessonId, lesson!.id) });
+      for (const old of oldTasks) if (old.order >= defs.length) await db.delete(tasks).where(eq(tasks.id, old.id));
+      for (const [ti, t] of defs.entries()) {
+        const tFields = { title: t.title, description: t.description, kind: t.kind, codingPrompt: t.codingPrompt ?? "" };
+        let task = oldTasks.find((x) => x.order === ti);
+        if (task) await db.update(tasks).set(tFields).where(eq(tasks.id, task.id));
+        else [task] = await db.insert(tasks).values({ ...tFields, lessonId: lesson!.id, order: ti }).returning();
+        const oldTpls = await db.query.frameTemplates.findMany({ where: eq(frameTemplates.taskId, task!.id) });
+        const keys = new Set((t.frames ?? []).map((f) => f.key));
+        for (const o of oldTpls) if (!keys.has(o.key)) await db.delete(frameTemplates).where(eq(frameTemplates.id, o.id));
         for (const [fi, f] of (t.frames ?? []).entries()) {
-          await db.insert(frameTemplates).values({
-            taskId: task.id,
-            key: f.key,
+          const fFields = {
             order: fi,
             type: f.type,
             title: f.title,
@@ -70,7 +73,10 @@ async function seedCurriculum() {
             crossLessonRefs: f.crossLessonRefs ?? [],
             posX: f.pos[0],
             posY: f.pos[1],
-          });
+          };
+          const o = oldTpls.find((x) => x.key === f.key);
+          if (o) await db.update(frameTemplates).set(fFields).where(eq(frameTemplates.id, o.id));
+          else await db.insert(frameTemplates).values({ ...fFields, taskId: task!.id, key: f.key });
         }
       }
     }

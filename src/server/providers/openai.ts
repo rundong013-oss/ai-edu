@@ -1,0 +1,40 @@
+// OpenAI 图像适配器：无参考图走 images.generate（文生图），有参考图走 images.edit（图生图）。
+import fs from "node:fs";
+import path from "node:path";
+import OpenAI, { toFile } from "openai";
+import { env } from "@/lib/env";
+import type { ImageProvider } from "./types";
+
+function sizeFor(ar: string): "1024x1024" | "1024x1536" | "1536x1024" {
+  const [a, b] = ar.split(":").map(Number);
+  if (!a || !b || a === b) return "1024x1024";
+  return a > b ? "1536x1024" : "1024x1536";
+}
+
+// 粗略单价（美元/张），用于用量看板估算；以实际账单为准
+const PRICE: Record<string, number> = { low: 0.016, medium: 0.063, high: 0.25 };
+
+export function openaiImage(): ImageProvider {
+  const client = new OpenAI({ apiKey: env.openaiKey, baseURL: env.openaiBaseUrl });
+  const model = env.openaiImageModel;
+  const quality = (process.env.OPENAI_IMAGE_QUALITY || "medium") as "low" | "medium" | "high";
+  return {
+    name: "openai",
+    model,
+    async generate(req) {
+      const size = sizeFor(req.aspectRatio);
+      let res;
+      if (req.refs.length) {
+        const files = await Promise.all(
+          req.refs.map((r) => toFile(fs.createReadStream(r.abs), path.basename(r.abs), { type: r.mime })),
+        );
+        res = await client.images.edit({ model, image: files, prompt: req.prompt, size, quality });
+      } else {
+        res = await client.images.generate({ model, prompt: req.prompt, size, quality, n: 1 });
+      }
+      const b64 = res.data?.[0]?.b64_json;
+      if (!b64) throw new Error("模型没有返回图片");
+      return { bytes: Buffer.from(b64, "base64"), ext: "png", model, costUsd: PRICE[quality] ?? 0 };
+    },
+  };
+}
