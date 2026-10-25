@@ -18,7 +18,7 @@ export default async function StudentHome() {
   ]);
   const myCourses = lic.length ? await db.query.courses.findMany({ where: inArray(courses.id, lic.map((l) => l.courseId)) }) : [];
   const live = rooms.filter((r) => r.status === "LIVE");
-  const ready = rooms.filter((r) => r.status === "READY");
+  const ready = rooms.filter((r) => r.status === "READY").sort((a, b) => a.course.level - b.course.level || a.lesson.index - b.lesson.index);
   const ended = rooms.filter((r) => r.status === "ENDED");
 
   return (
