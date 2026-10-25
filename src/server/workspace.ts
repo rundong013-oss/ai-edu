@@ -156,3 +156,56 @@ export async function workspaceState(workspaceId: string) {
 }
 
 export type WorkspaceState = NonNullable<Awaited<ReturnType<typeof workspaceState>>>;
+
+/** 演示用的画布状态：直接由课节模板生成，不落库 */
+export async function demoState(lessonId: string): Promise<WorkspaceState | null> {
+  const lesson = await db.query.lessons.findFirst({ where: eq(lessons.id, lessonId) });
+  if (!lesson) return null;
+  const course = await db.query.courses.findFirst({ where: eq(courses.id, lesson.courseId) });
+  const taskList = await lessonTasksWithTemplates(lessonId);
+  const keyToId = new Map(taskList.flatMap((t) => t.templates).map((tpl) => [tpl.key, `demo-${tpl.id}`]));
+  const frameViews: FrameView[] = taskList.flatMap((t) =>
+    t.templates.map((tpl) => ({
+      id: `demo-${tpl.id}`,
+      workspaceId: "demo",
+      templateId: tpl.id,
+      taskId: t.id,
+      key: tpl.key,
+      type: tpl.type,
+      title: tpl.title,
+      isSpare: false,
+      prompt: "",
+      slotValues: Object.fromEntries(tpl.slots.map((s) => [s.key, s.default])),
+      aspectRatio: tpl.aspectRatio,
+      upstreamFrameIds: tpl.upstreamKeys.map((k) => keyToId.get(k)!).filter(Boolean),
+      maxGenerations: tpl.maxGenerations,
+      usedCount: 0,
+      selectedGenerationId: null,
+      posX: tpl.posX,
+      posY: tpl.posY,
+      createdAt: new Date(0),
+      template: { promptTemplate: tpl.promptTemplate, slots: tpl.slots, crossLessonRefs: tpl.crossLessonRefs },
+      generations: [],
+      selectedUrl: null,
+    })),
+  );
+  return {
+    workspace: {
+      id: "demo",
+      classroomId: "demo",
+      studentId: "demo",
+      currentTaskId: taskList[0]?.id ?? null,
+      spareUsed: 0,
+      agentSessionId: null,
+      codingTurnsUsed: 0,
+      codingBusy: false,
+      lastActiveAt: null,
+      createdAt: new Date(0),
+    },
+    classroom: { id: "demo", name: "备课演示", status: "READY" },
+    lesson: { id: lesson.id, index: lesson.index, title: lesson.title, subtitle: lesson.subtitle, kind: lesson.kind, spareFrames: lesson.spareFrames, courseCode: course?.code ?? "" },
+    tasks: taskList.map((t) => ({ id: t.id, order: t.order, title: t.title, description: t.description, kind: t.kind, codingPrompt: t.codingPrompt })),
+    frames: frameViews,
+    submittedFrameKeys: [],
+  };
+}

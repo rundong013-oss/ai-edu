@@ -102,7 +102,7 @@ function withBase(html: string, base: string) {
   return tag + html;
 }
 
-export function CodingRoom({ workspaceId, backHref = "/student" }: { workspaceId: string; backHref?: string }) {
+export function CodingRoom({ workspaceId, backHref = "/student", readOnly = false, viewerNote }: { workspaceId: string; backHref?: string; readOnly?: boolean; viewerNote?: string }) {
   const { state, feed, running, draft, previewVersion, bumpPreview, error, setError, send, stop } = useCoding(workspaceId);
   const [input, setInput] = useState("");
   const [device, setDevice] = useState<"phone" | "desktop">("phone");
@@ -181,10 +181,14 @@ export function CodingRoom({ workspaceId, backHref = "/student" }: { workspaceId
           {live && <span className="live-dot" />}
           {live ? "上课中" : state.classroom.status === "READY" ? "等待开课" : "已下课"}
         </span>
-        <button className="btn btn-spark btn-sm ml-auto" onClick={() => setShowSubmit(true)} disabled={!state.files.some((f) => f.path === "index.html")}>
-          <Send size={14} />
-          提交作品
-        </button>
+        {readOnly ? (
+          <span className="tag ml-auto">{viewerNote ?? "只读查看"}</span>
+        ) : (
+          <button className="btn btn-spark btn-sm ml-auto" onClick={() => setShowSubmit(true)} disabled={!state.files.some((f) => f.path === "index.html")}>
+            <Send size={14} />
+            提交作品
+          </button>
+        )}
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -208,6 +212,11 @@ export function CodingRoom({ workspaceId, backHref = "/student" }: { workspaceId
             <div ref={feedEnd} />
           </div>
 
+          {readOnly ? (
+            <div className="border-t border-line p-3 font-mono text-xs text-muted">
+              已用 {state.workspace.turnsUsed}/{state.lesson.maxTurns} 次对话{running ? " · AI 正在写" : ""}
+            </div>
+          ) : (
           <div className="border-t border-line p-3">
             <div className="mb-2 flex flex-wrap gap-1.5">
               {state.tasks.map((t, i) => (
@@ -278,6 +287,7 @@ export function CodingRoom({ workspaceId, backHref = "/student" }: { workspaceId
               </div>
             </div>
           </div>
+          )}
         </section>
 
         {/* 预览 */}

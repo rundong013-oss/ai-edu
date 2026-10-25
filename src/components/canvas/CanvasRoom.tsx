@@ -22,14 +22,24 @@ import { SubmitDialog } from "./SubmitDialog";
 
 const nodeTypes = { frame: FrameNode };
 
-export function CanvasRoom({ workspaceId, backHref = "/student" }: { workspaceId: string; backHref?: string }) {
+export function CanvasRoom({ workspaceId, backHref = "/student", readOnly = false, viewerNote }: { workspaceId: string; backHref?: string; readOnly?: boolean; viewerNote?: string }) {
   const { state, setState, error, refresh } = useWorkspace(workspaceId);
   if (!state) {
     return <div className="grid h-dvh place-items-center text-muted">{error ?? "正在打开画布…"}</div>;
   }
   return (
     <ReactFlowProvider>
-      <CanvasInner state={state} setState={setState} refresh={refresh} error={error} backHref={backHref} />
+      <CanvasInner state={state} setState={setState} refresh={refresh} error={error} backHref={backHref} readOnly={readOnly} viewerNote={viewerNote} />
+    </ReactFlowProvider>
+  );
+}
+
+/** 教师备课 / 投屏演示：用课程模板渲染一张不能生成的画布 */
+export function CanvasDemo({ initial, backHref }: { initial: WorkspaceState; backHref: string }) {
+  const [state, setState] = useState(initial);
+  return (
+    <ReactFlowProvider>
+      <CanvasInner state={state} setState={setState} refresh={async () => state} error={null} backHref={backHref} readOnly viewerNote="演示模式：可以给学生讲解每个框体和提示词，不能生成" />
     </ReactFlowProvider>
   );
 }
@@ -40,12 +50,16 @@ function CanvasInner({
   refresh,
   error,
   backHref,
+  readOnly = false,
+  viewerNote,
 }: {
   state: WorkspaceState;
   setState: (s: WorkspaceState) => void;
   refresh: () => Promise<WorkspaceState | null>;
   error: string | null;
   backHref: string;
+  readOnly?: boolean;
+  viewerNote?: string;
 }) {
   const rf = useReactFlow();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -54,8 +68,8 @@ function CanvasInner({
   const [toast, setToast] = useState<string | null>(null);
   const [showSubmit, setShowSubmit] = useState(false);
 
-  const live = state.classroom.status === "LIVE";
-  const blockedReason = live ? null : state.classroom.status === "READY" ? "老师还没开课" : "这节课已经下课了";
+  const live = state.classroom.status === "LIVE" && !readOnly;
+  const blockedReason = readOnly ? viewerNote ?? "只读查看" : live ? null : state.classroom.status === "READY" ? "老师还没开课" : "这节课已经下课了";
   const taskNo = useMemo(() => new Map(state.tasks.map((t, i) => [t.id, i + 1])), [state.tasks]);
   const byId = useMemo(() => new Map(state.frames.map((f) => [f.id, f])), [state.frames]);
   const selected = selectedId ? byId.get(selectedId) ?? null : null;
@@ -67,6 +81,7 @@ function CanvasInner({
 
   const pick = useCallback(
     async (frameId: string, genId: string) => {
+      if (readOnly) return;
       setState({
         ...state,
         frames: state.frames.map((f) =>
@@ -76,7 +91,7 @@ function CanvasInner({
       await api(`/api/frames/${frameId}`, "PATCH", { selectedGenerationId: genId }).catch((e) => flash(e.message));
       refresh();
     },
-    [state, setState, refresh],
+    [state, setState, refresh, readOnly],
   );
 
   const nodes: FrameNodeType[] = state.frames.map((f) => ({
@@ -90,6 +105,7 @@ function CanvasInner({
       inCurrentTask: !currentTask || f.taskId === currentTask || f.isSpare,
       submitted: state.submittedFrameKeys.includes(f.key),
       onPick: pick,
+      readOnly,
     },
   }));
 
@@ -111,6 +127,7 @@ function CanvasInner({
   };
 
   const onConnect = async (c: Connection) => {
+    if (readOnly) return;
     const target = byId.get(c.target);
     if (!target?.isSpare) return flash("课程框体的连线是固定的；备用框体可以自由连线");
     const ups = Array.from(new Set([...target.upstreamFrameIds, c.source]));
@@ -161,15 +178,21 @@ function CanvasInner({
           </div>
           <div className="truncate text-xs text-muted">{state.classroom.name}</div>
         </div>
-        <span className={`tag ${live ? "tag-live" : ""}`}>
-          {live && <span className="live-dot" />}
-          {live ? "上课中" : state.classroom.status === "READY" ? "等待开课" : "已下课"}
-        </span>
+        {readOnly ? (
+          <span className="tag">{viewerNote ?? "只读查看"}</span>
+        ) : (
+          <span className={`tag ${live ? "tag-live" : ""}`}>
+            {live && <span className="live-dot" />}
+            {live ? "上课中" : state.classroom.status === "READY" ? "等待开课" : "已下课"}
+          </span>
+        )}
         {error && <span className="text-xs text-amber">{error}</span>}
-        <button className="btn btn-spark btn-sm ml-auto" onClick={() => setShowSubmit(true)}>
-          <Send size={14} />
-          提交作品
-        </button>
+        {!readOnly && (
+          <button className="btn btn-spark btn-sm ml-auto" onClick={() => setShowSubmit(true)}>
+            <Send size={14} />
+            提交作品
+          </button>
+        )}
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -233,7 +256,9 @@ function CanvasInner({
             edges={edges}
             nodeTypes={nodeTypes}
             onNodesChange={onNodesChange}
-            onNodeDragStop={(_, n) => api(`/api/frames/${n.id}`, "PATCH", { posX: n.position.x, posY: n.position.y }).catch(() => {})}
+            onNodeDragStop={(_, n) => {
+              if (!readOnly) api(`/api/frames/${n.id}`, "PATCH", { posX: n.position.x, posY: n.position.y }).catch(() => {});
+            }}
             onConnect={onConnect}
             onPaneClick={() => setSelectedId(null)}
             fitView
@@ -256,7 +281,9 @@ function CanvasInner({
                   canGenerate={live}
                   blockedReason={blockedReason}
                   onClose={() => setSelectedId(null)}
-                  onDraft={(patch) => api(`/api/frames/${selected.id}`, "PATCH", patch).catch(() => {})}
+                  onDraft={(patch) => {
+                    if (!readOnly) api(`/api/frames/${selected.id}`, "PATCH", patch).catch(() => {});
+                  }}
                   onGenerate={async (prompt, slotValues) => {
                     await api(`/api/frames/${selected.id}/generate`, "POST", { prompt, slotValues });
                     await refresh();
