@@ -5,8 +5,15 @@ export type Role = "ADMIN" | "TEACHER" | "STUDENT";
 export type SessionData = { uid: string; role: Role; name: string };
 
 export const SESSION_COOKIE = "aiedu_session";
-const key = () =>
-  new TextEncoder().encode(process.env.SESSION_SECRET || "dev-secret-change-me-dev-secret-change-me");
+const DEV_SECRET = "dev-secret-change-me-dev-secret-change-me";
+const key = () => {
+  const secret = process.env.SESSION_SECRET;
+  // 生产环境不允许用默认值或过短的密钥，否则任何人都能伪造登录
+  if (process.env.NODE_ENV === "production" && (!secret || secret.length < 32 || secret.startsWith("change-me"))) {
+    throw new Error("SESSION_SECRET 未配置或太短（至少 32 个字符）");
+  }
+  return new TextEncoder().encode(secret || DEV_SECRET);
+};
 
 export async function signSession(data: SessionData) {
   return new SignJWT(data)

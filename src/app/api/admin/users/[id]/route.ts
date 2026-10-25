@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
@@ -12,8 +13,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (id === s.uid && body.disabled) return jsonError(400, "不能停用自己");
   const patch: Partial<typeof users.$inferInsert> = {};
   if (typeof body.disabled === "boolean") patch.disabled = body.disabled;
-  if (body.resetPassword) patch.passwordHash = bcrypt.hashSync("123456", 10);
+  let newPassword: string | undefined;
+  if (body.resetPassword) {
+    newPassword = randomBytes(6).toString("base64url").slice(0, 8);
+    patch.passwordHash = bcrypt.hashSync(newPassword, 10);
+  }
   if (body.name?.trim()) patch.name = body.name.trim();
   await db.update(users).set(patch).where(eq(users.id, id));
-  return Response.json({ ok: true });
+  return Response.json({ ok: true, newPassword });
 }

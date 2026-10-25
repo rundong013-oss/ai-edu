@@ -1,0 +1,7 @@
+{$SITE_ADDRESS} {
+	encode gzip
+	# Vibe Coding 用 SSE 流式推送，必须立即转发、不能缓冲
+	reverse_proxy app:3000 {
+		flush_interval -1
+	}
+}

@@ -7,10 +7,18 @@ import { users, courses, lessons, tasks, frameTemplates, licenses, promptBlocks 
 import { DEFAULT_BLOCKS } from "../server/prompts";
 import { curriculum, PLAN_PLACEHOLDER } from "../content/curriculum";
 
+// 本地开发：所有演示账号密码 123456。
+// 服务器部署：ADMIN_PASSWORD 设置管理员密码；DEMO_PASSWORD 设置演示老师/学生的密码；SEED_DEMO=false 则不建演示老师/学生。
 async function seedUsers() {
-  const pw = bcrypt.hashSync("123456", 10);
+  const prod = process.env.NODE_ENV === "production";
+  const adminPw = process.env.ADMIN_PASSWORD || (prod ? "" : "123456");
+  const demoPw = process.env.DEMO_PASSWORD || (prod ? "" : "123456");
+  if (prod && !adminPw) throw new Error("生产环境需要设置 ADMIN_PASSWORD");
+  const admin = await db.query.users.findFirst({ where: eq(users.username, "admin") });
+  if (!admin) await db.insert(users).values({ username: "admin", name: "机构管理员", role: "ADMIN", passwordHash: bcrypt.hashSync(adminPw, 10) });
+  if (process.env.SEED_DEMO === "false" || !demoPw) return;
+  const pw = bcrypt.hashSync(demoPw, 10);
   const demo = [
-    { username: "admin", name: "机构管理员", role: "ADMIN" as const },
     { username: "teacher", name: "张老师", role: "TEACHER" as const },
     { username: "teacher2", name: "李老师", role: "TEACHER" as const },
     { username: "stu1", name: "小明", role: "STUDENT" as const },

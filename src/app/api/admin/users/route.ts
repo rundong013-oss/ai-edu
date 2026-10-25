@@ -10,10 +10,11 @@ export async function POST(req: Request) {
   if (!["TEACHER", "STUDENT", "ADMIN"].includes(role)) return jsonError(400, "角色不对");
   if (!/^[\w.-]{2,32}$/.test(username ?? "")) return jsonError(400, "账号只能用字母、数字、下划线，2–32 位");
   if (!name?.trim()) return jsonError(400, "请填写姓名");
+  if ((password ?? "").length < 6) return jsonError(400, "初始密码至少 6 位");
   if (await db.query.users.findFirst({ where: eq(users.username, username) })) return jsonError(400, "这个账号已经存在");
   const [u] = await db
     .insert(users)
-    .values({ role, username, name: name.trim(), passwordHash: bcrypt.hashSync(password || "123456", 10) })
+    .values({ role, username, name: name.trim(), passwordHash: bcrypt.hashSync(password!, 10) })
     .returning({ id: users.id });
   return Response.json(u);
 }

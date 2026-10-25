@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/Shell";
 import { ApiButton } from "@/components/ApiButton";
 import { listUsers } from "@/server/queries";
 import { NewUserForm } from "./NewUserForm";
+import { ResetPasswordButton } from "./ResetPasswordButton";
 
 const ROLE = { ADMIN: "管理员", TEACHER: "老师", STUDENT: "学生" } as const;
 
@@ -30,9 +31,7 @@ export default async function UsersPage() {
                 <td>{ROLE[u.role]}</td>
                 <td>{u.disabled ? <span className="text-amber">已停用</span> : <span className="text-muted">正常</span>}</td>
                 <td className="space-x-1 text-right">
-                  <ApiButton url={`/api/admin/users/${u.id}`} method="PATCH" body={{ resetPassword: true }} className="btn btn-ghost btn-sm" confirm={`把 ${u.name} 的密码重置为 123456？`}>
-                    重置密码
-                  </ApiButton>
+                  <ResetPasswordButton id={u.id} name={u.name} />
                   <ApiButton url={`/api/admin/users/${u.id}`} method="PATCH" body={{ disabled: !u.disabled }} className="btn btn-ghost btn-sm">
                     {u.disabled ? "启用" : "停用"}
                   </ApiButton>

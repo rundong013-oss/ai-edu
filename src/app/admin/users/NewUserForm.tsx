@@ -39,7 +39,7 @@ export function NewUserForm() {
       </label>
       <label className="w-40">
         <span className="mb-1 block text-xs text-muted">初始密码</span>
-        <input className="input" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} placeholder="默认 123456" />
+        <input className="input" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} placeholder="至少 6 位" />
       </label>
       <button className="btn btn-spark" disabled={busy}>
         创建账号
