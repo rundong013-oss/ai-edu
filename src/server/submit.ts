@@ -37,7 +37,7 @@ export async function submitFrame(workspaceId: string, frameId: string) {
 }
 
 /** 提交网页作品：把项目目录拍一个快照（之后学生继续改不影响已提交版本） */
-export async function submitWeb(workspaceId: string, title: string, coverPath: string | null) {
+export async function submitWeb(workspaceId: string, title: string, coverAsset: string | null) {
   const ws = await db.query.workspaces.findFirst({ where: eq(workspaces.id, workspaceId) });
   if (!ws) return null;
   const src = projectDir(workspaceId);
@@ -54,7 +54,8 @@ export async function submitWeb(workspaceId: string, title: string, coverPath: s
       type: "WEB",
       title: title || "我的网页",
       path: rel(dest),
-      coverPath,
+      // 封面：项目里的某个素材（相对项目根目录，如 assets/fusion-1.png）→ 快照里的同一文件
+      coverPath: coverAsset && /^assets\/[\w.-]+$/.test(coverAsset) && fs.existsSync(dataPath("submissions", snapId, coverAsset)) ? `${rel(dest)}/${coverAsset}` : null,
       shareToken: nanoid(10),
     })
     .returning();
