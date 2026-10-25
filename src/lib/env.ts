@@ -5,7 +5,7 @@ export const env = {
   dataDir: path.resolve(process.cwd(), process.env.DATA_DIR || "./data"),
   imageProvider: (process.env.IMAGE_PROVIDER || "mock") as "openai" | "mock",
   openaiKey: process.env.OPENAI_API_KEY || "",
-  openaiImageModel: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1",
+  openaiImageModel: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2.5-flare",
   openaiBaseUrl: process.env.OPENAI_BASE_URL || undefined,
   videoProvider: (process.env.VIDEO_PROVIDER || "mock") as "mock",
   codingProvider: (process.env.CODING_PROVIDER || "mock") as "claude" | "mock",

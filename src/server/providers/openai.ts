@@ -23,10 +23,12 @@ export function openaiImage(): ImageProvider {
     name: "openai",
     model,
     async generate(req) {
+      // OpenAI 只接受位图作参考；mock 留下的 SVG 之类跳过
+      const refs = req.refs.filter((r) => /image\/(png|jpeg|webp)/.test(r.mime));
       const call = async (size: ReturnType<typeof sizeFor> | "auto") => {
-        if (req.refs.length) {
+        if (refs.length) {
           const files = await Promise.all(
-            req.refs.map((r) => toFile(fs.createReadStream(r.abs), path.basename(r.abs), { type: r.mime })),
+            refs.map((r) => toFile(fs.createReadStream(r.abs), path.basename(r.abs), { type: r.mime })),
           );
           return client.images.edit({ model: editModel, image: files, prompt: req.prompt, size, quality });
         }
@@ -42,7 +44,7 @@ export function openaiImage(): ImageProvider {
       }
       const b64 = res.data?.[0]?.b64_json;
       if (!b64) throw new Error("模型没有返回图片");
-      return { bytes: Buffer.from(b64, "base64"), ext: "png", model: req.refs.length ? editModel : model, costUsd: PRICE[quality] ?? 0 };
+      return { bytes: Buffer.from(b64, "base64"), ext: "png", model: refs.length ? editModel : model, costUsd: PRICE[quality] ?? 0 };
     },
   };
 }
