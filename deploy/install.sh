@@ -14,6 +14,18 @@ rand() { head -c 64 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c "$1"; }
 
 if [ "$(id -u)" -ne 0 ]; then echo "请用 root 或 sudo 运行"; exit 1; fi
 
+# 内存小于 3.5GB 时加 2GB 交换空间，避免构建镜像时内存不足
+if [ "$(awk '/MemTotal/{print $2}' /proc/meminfo)" -lt 3500000 ] && ! swapon --show | grep -q /swapfile; then
+  say "内存较小，添加 2GB 交换空间"
+  fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048
+  chmod 600 /swapfile && mkswap /swapfile >/dev/null && swapon /swapfile
+  grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+if ! command -v apt-get >/dev/null 2>&1; then
+  echo "这个脚本需要 Ubuntu / Debian 系统，请在云服务器控制台把系统重装为 Ubuntu 24.04"; exit 1
+fi
+
 say "1/5 安装 Docker（已安装则跳过）"
 if ! command -v docker >/dev/null 2>&1; then
   curl -fsSL https://get.docker.com | sh
