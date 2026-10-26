@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/Shell";
 import { coursesWithLessons } from "@/server/queries";
 import { LessonQuota } from "./LessonQuota";
+import { kindLabel } from "@/lib/lesson";
 
 export default async function CoursesPage() {
   const courses = await coursesWithLessons();
@@ -23,7 +24,7 @@ export default async function CoursesPage() {
                       {l.title}
                       {l.subtitle && <span className="ml-2 text-sm text-muted">{l.subtitle}</span>}
                     </td>
-                    <td className="w-24">{l.kind === "CANVAS" ? "画布" : "Vibe Coding"}</td>
+                    <td className="w-24">{kindLabel(l.kind)}</td>
                     <td>
                       {l.ready ? (
                         <LessonQuota id={l.id} kind={l.kind} spareFrames={l.spareFrames} codingMaxTurns={l.codingMaxTurns} codingModel={l.codingModel} />

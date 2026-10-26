@@ -42,7 +42,8 @@ export const lessons = sqliteTable(
     index: integer("idx").notNull(), // 1..16
     title: text("title").notNull(),
     subtitle: text("subtitle").notNull().default(""),
-    kind: text("kind", { enum: ["CANVAS", "CODING"] }).notNull(),
+    // MIXED：同一节课里先在画布上生成素材，再用 Vibe Coding 做作品（如第 4 节：先画主角再做游戏）
+    kind: text("kind", { enum: ["CANVAS", "CODING", "MIXED"] }).notNull(),
     ready: integer("ready", { mode: "boolean" }).notNull().default(false), // 内容是否已设计好
     durationMin: integer("duration_min").notNull().default(90),
     objectives: text("objectives").notNull().default(""), // markdown
@@ -86,6 +87,8 @@ export const frameTemplates = sqliteTable("frame_templates", {
   crossLessonRefs: text("cross_lesson_refs", { mode: "json" }).$type<string[]>().notNull().default([]),
   // 这个框体开放哪些类别的提示词积木（空 = 按框体类型用默认类别）
   blockCategories: text("block_categories", { mode: "json" }).$type<string[]>().notNull().default([]),
+  // 生成透明背景的图片（游戏角色贴图等）
+  transparentBg: integer("transparent_bg", { mode: "boolean" }).notNull().default(false),
   posX: real("pos_x").notNull().default(0),
   posY: real("pos_y").notNull().default(0),
 });
@@ -277,7 +280,7 @@ export const usageRecords = sqliteTable(
 export type PickedBlock = { id: string; category: string; label: string; text: string };
 
 export type WorkProcess = {
-  kind: "canvas" | "coding";
+  kind: "canvas" | "coding" | "mixed"; // mixed：先在画布上生成素材，再编程
   steps: { title: string; prompt: string; blocks?: string[]; refs?: string[]; attempts?: number; output?: string | null }[];
 };
 

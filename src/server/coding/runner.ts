@@ -8,6 +8,7 @@ import { agentRuns, classrooms, codingMessages, lessons, usageRecords, workspace
 import { env } from "@/lib/env";
 import { projectDir } from "@/lib/paths";
 import { runMock } from "./mock";
+import { prepareCodingProject } from "./project";
 
 // ---------- 事件（服务端 → 前端，经 SSE 推送） ----------
 export type CodingEvent =
@@ -133,6 +134,8 @@ export async function startCodingRun(workspaceId: string, prompt: string) {
     let error: string | undefined;
     let produced = false;
     try {
+      // 混合课：学生可能刚在画布上换了主角图，开跑前同步一次素材
+      if (lesson!.kind === "MIXED") await prepareCodingProject(workspaceId);
       const dir = projectDir(workspaceId);
       const sink = {
         emit: (e: CodingEvent) => {

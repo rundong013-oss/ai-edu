@@ -7,6 +7,7 @@ import { loadWorkspaceFor } from "@/server/access";
 import { getClassroomFull } from "@/server/workspace";
 import { CanvasRoom } from "@/components/canvas/CanvasRoom";
 import { CodingRoom } from "@/components/coding/CodingRoom";
+import { MixedRoom } from "@/components/room/MixedRoom";
 
 /** 老师只读查看某个学生的画布 / 编程过程 */
 export default async function ViewWorkspace({ params }: { params: Promise<{ wsId: string }> }) {
@@ -17,9 +18,11 @@ export default async function ViewWorkspace({ params }: { params: Promise<{ wsId
   const full = await getClassroomFull(r.room.id);
   const ws = await db.query.workspaces.findFirst({ where: eq(workspaces.id, wsId) });
   const stu = await db.query.users.findFirst({ where: eq(users.id, ws!.studentId) });
-  const note = `正在查看 ${stu?.name ?? "学生"} 的${full!.lesson.kind === "CANVAS" ? "画布" : "项目"}（只读）`;
+  const kind = full!.lesson.kind;
+  const note = `正在查看 ${stu?.name ?? "学生"} 的${kind === "CANVAS" ? "画布" : kind === "CODING" ? "项目" : "课堂"}（只读）`;
   const back = `/teacher/classrooms/${r.room.id}`;
-  return full!.lesson.kind === "CODING" ? (
+  if (kind === "MIXED") return <MixedRoom workspaceId={wsId} backHref={back} readOnly viewerNote={note} />;
+  return kind === "CODING" ? (
     <CodingRoom workspaceId={wsId} backHref={back} readOnly viewerNote={note} />
   ) : (
     <CanvasRoom workspaceId={wsId} backHref={back} readOnly viewerNote={note} />

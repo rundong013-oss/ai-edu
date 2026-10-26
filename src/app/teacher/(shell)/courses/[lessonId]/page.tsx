@@ -7,19 +7,21 @@ import { courses, lessons } from "@/db/schema";
 import { PageHeader } from "@/components/Shell";
 import { Md } from "@/components/Md";
 import { lessonTasksWithTemplates } from "@/server/workspace";
+import { hasCanvas, hasCoding, kindLessonLabel } from "@/lib/lesson";
 
-function Template({ tpl }: { tpl: string }) {
+/** 提示词模板：填空处显示学生看到的标签（如「角色是谁」）和默认值 */
+function Template({ tpl, slots }: { tpl: string; slots: { key: string; label: string; default: string }[] }) {
   return (
     <span className="leading-loose">
-      {tpl.split(/(\{\{\w+\}\})/g).map((p, i) =>
-        p.startsWith("{{") ? (
-          <span key={i} className="mx-0.5 rounded bg-spark-dim px-1.5 py-0.5 text-spark">
-            {p.slice(2, -2)}
+      {tpl.split(/(\{\{\w+\}\})/g).map((p, i) => {
+        if (!p.startsWith("{{")) return p;
+        const slot = slots.find((s) => s.key === p.slice(2, -2));
+        return (
+          <span key={i} className="mx-0.5 rounded bg-spark-dim px-1.5 py-0.5 text-spark" title={slot ? `默认：${slot.default}` : undefined}>
+            {slot?.label ?? p.slice(2, -2)}
           </span>
-        ) : (
-          p
-        ),
-      )}
+        );
+      })}
     </span>
   );
 }
@@ -35,9 +37,9 @@ export default async function LessonPrep({ params }: { params: Promise<{ lessonI
     <>
       <PageHeader
         title={`第 ${lesson.index} 节 · ${lesson.title}`}
-        desc={`${course?.title} · ${lesson.subtitle} · ${lesson.durationMin} 分钟 · ${lesson.kind === "CANVAS" ? "画布课" : "Vibe Coding 课"}`}
+        desc={`${course?.title} · ${lesson.subtitle} · ${lesson.durationMin} 分钟 · ${kindLessonLabel(lesson.kind)}`}
         actions={
-          lesson.kind === "CANVAS" ? (
+          hasCanvas(lesson.kind) ? (
             <Link href={`/teacher/demo/${lesson.id}?tab=1`} target="_blank" className="btn btn-spark">
               <Presentation size={15} />
               打开演示画布
@@ -67,14 +69,27 @@ export default async function LessonPrep({ params }: { params: Promise<{ lessonI
                         {f.type === "VIDEO" ? "视频框" : f.type === "TEXT" ? "文字框" : "图片框"} · {f.title} · 可生成 {f.maxGenerations} 次 · 画幅 {f.aspectRatio}
                         {f.upstreamKeys.length > 0 && ` · 参考：${f.upstreamKeys.join("、")}`}
                         {f.crossLessonRefs.length > 0 && " · 自动参考上节课作品"}
+                        {f.transparentBg && " · 透明背景"}
                       </div>
-                      <Template tpl={f.promptTemplate} />
+                      <Template tpl={f.promptTemplate} slots={f.slots} />
                     </div>
                   ))}
-                  {t.codingPrompt && t.kind !== "FREE" && <div className="mt-2 rounded-lg bg-night p-3 text-sm text-ink/85">{t.codingPrompt}</div>}
+                  {t.codingPrompt && t.kind !== "FREE" && (
+                    <div className="mt-2 rounded-lg bg-night p-3 text-sm text-ink/85">
+                      <div className="mb-1 text-xs text-muted">Vibe Coding · 预设提示词（学生点「任务」自动填入，可以改）</div>
+                      {t.codingPrompt}
+                    </div>
+                  )}
                 </li>
               ))}
             </ol>
+          </section>
+          <section className="card p-5">
+            <h2 className="mb-3 flex items-center gap-2 font-medium">
+              <FileText size={16} className="text-muted" />
+              教案
+            </h2>
+            <Md text={lesson.lessonPlan} />
           </section>
         </div>
         <div className="space-y-5">
@@ -85,18 +100,11 @@ export default async function LessonPrep({ params }: { params: Promise<{ lessonI
             </h2>
             <div className="grid aspect-video place-items-center rounded-lg border border-dashed border-line text-sm text-muted">课件待上传（占位）</div>
           </section>
-          <section className="card p-5">
-            <h2 className="mb-3 flex items-center gap-2 font-medium">
-              <FileText size={16} className="text-muted" />
-              教案
-            </h2>
-            <Md text={lesson.lessonPlan} />
+          <section className="card space-y-1.5 p-5 text-sm text-muted">
+            {hasCanvas(lesson.kind) && lesson.spareFrames > 0 && <p>本节每个学生有 {lesson.spareFrames} 个备用框体用于自由创作。</p>}
+            {hasCoding(lesson.kind) && <p>本节每个学生最多和 AI 对话 {lesson.codingMaxTurns} 次。</p>}
+            {lesson.kind === "MIXED" && <p>学生先在画布上完成素材，再点「下一步」进入编程；画布上选中的图会自动放进项目的 assets/ 文件夹。</p>}
           </section>
-          {lesson.kind === "CANVAS" ? (
-            <section className="card p-5 text-sm text-muted">本节每个学生有 {lesson.spareFrames} 个备用框体用于自由创作。</section>
-          ) : (
-            <section className="card p-5 text-sm text-muted">本节每个学生最多和 AI 对话 {lesson.codingMaxTurns} 次。</section>
-          )}
         </div>
       </div>
     </>

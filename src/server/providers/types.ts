@@ -2,6 +2,7 @@ export type ImageRequest = {
   prompt: string;
   aspectRatio: string; // "1:1" | "3:4" | "16:9" ...
   refs: { abs: string; mime: string }[]; // 参考图（图生图）
+  transparent?: boolean; // 透明背景（游戏角色贴图）
 };
 export type MediaResult = { bytes: Buffer; ext: string; model: string; costUsd: number };
 

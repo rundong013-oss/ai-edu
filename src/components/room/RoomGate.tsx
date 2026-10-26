@@ -5,6 +5,7 @@ import { PageLoading } from "@/components/PageLoading";
 import { NoiseField } from "@/components/NoiseField";
 import { CanvasRoom } from "@/components/canvas/CanvasRoom";
 import { CodingRoom } from "@/components/coding/CodingRoom";
+import { MixedRoom } from "./MixedRoom";
 
 /** 等待开课 → 开课后自动进入画布 / Vibe Coding */
 export function RoomGate({
@@ -15,7 +16,7 @@ export function RoomGate({
   studentName,
 }: {
   classroomId: string;
-  kind: "CANVAS" | "CODING";
+  kind: "CANVAS" | "CODING" | "MIXED";
   title: string;
   roomName: string;
   studentName: string;
@@ -46,7 +47,10 @@ export function RoomGate({
     };
   }, [classroomId]);
 
-  if (ws) return kind === "CODING" ? <CodingRoom workspaceId={ws} /> : <CanvasRoom workspaceId={ws} />;
+  if (ws) {
+    if (kind === "MIXED") return <MixedRoom workspaceId={ws} classroomId={classroomId} />;
+    return kind === "CODING" ? <CodingRoom workspaceId={ws} /> : <CanvasRoom workspaceId={ws} />;
+  }
   if (!waiting) return <PageLoading full text="正在进入课堂…" />;
 
   return (

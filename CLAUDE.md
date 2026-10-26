@@ -27,7 +27,7 @@ npx tsc --noEmit && npx eslint src --quiet   # 提交前检查
 - Next.js 15 App Router + TypeScript + Tailwind v4；数据库 SQLite（Drizzle + libSQL，`src/db/schema.ts`）；画布用 React Flow（`@xyflow/react`）。
 - 三端路由：`/admin`（机构）、`/teacher/(shell)` 带侧栏的页面 + `/teacher/(full)` 全屏页面（查看学生、演示画布、投屏）、`/student`。`src/middleware.ts` 按角色拦截。
 - 公开页面：`/share/[token]` 作品分享页、`/s/[token]/...` 网页作品快照、`/preview/[workspaceId]/...` 学生项目实时预览。
-- 课程内容在代码里：`src/content/curriculum.ts`（课节 → 任务 → 框体模板，含填空模板、连线、跨课引用）。
+- 课程内容在代码里：`src/content/curriculum.ts`（课节 → 任务 → 框体模板，含填空模板、连线、跨课引用、教案）。课型三种：`CANVAS` 画布课、`CODING` Vibe Coding 课、`MIXED` 混合课（先画布后编程，学生端 `MixedRoom` 两步切换；本节画布选中的图以框体 key 命名同步进项目 `assets/`）。判断课型用 `src/lib/lesson.ts` 的 `hasCanvas` / `hasCoding`。
 - 生成流程：`src/server/generation.ts`（屏蔽词检查 → 原子扣次数 → 拼提示词 → 异步调模型 → 失败退次数 → 记用量）。
 - 提示词分层：`src/server/prompts.ts`（平台层规则默认值、屏蔽词、积木库默认值、拼接逻辑）。后台 `/admin/prompts` 可改，存在 `settings` 和 `prompt_blocks` 表。
 - 模型适配：`src/server/providers/`（OpenAI 图像 / mock 图像和视频 / Claude 文字）。
@@ -38,7 +38,8 @@ npx tsc --noEmit && npx eslint src --quiet   # 提交前检查
 - 数据库里只存相对 `DATA_DIR` 的路径，用 `src/lib/paths.ts` 的 `dataPath` / `rel` / `safeJoin`，不要手拼路径。
 - 额度扣减必须用带条件的 `UPDATE ... WHERE used < max RETURNING`，不要先查再改。
 - Next.js 会去掉 URL 末尾的 `/`：项目预览一律用 `/preview/<id>/index.html`，否则相对路径的 css 加载不到。
-- OpenAI 参考图只接受 png/jpeg/webp；mock 产出的 SVG 会被跳过。
+- OpenAI 参考图只接受 png/jpeg/webp；mock 产出的 SVG 会被跳过。框体模板 `transparentBg` 开启时请求透明背景 PNG（游戏角色贴图）。
+- 服务器容器每次启动都会 `drizzle-kit push` + 种子数据，改了表结构或课程内容只要更新部署即可。
 - Node 的 fetch 默认不走 `HTTPS_PROXY`，需要 `NODE_USE_ENV_PROXY=1`。
 - Claude 产品形态必须用 Console API key（`ANTHROPIC_API_KEY`），不能用 Pro/Max 登录态。
 - 视觉风格：深色、电影感，荧光绿 `--spark` 是唯一强调色；粒子动画（`NoiseField`）只用在登录页和「正在生成」上，不要到处加动效。

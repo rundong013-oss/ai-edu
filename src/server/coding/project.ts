@@ -2,9 +2,9 @@
 // 老师开课 / 学生进入时就准备好，agent 只在这个目录里改文件（速度方案第 3、7 条）。
 import fs from "node:fs";
 import path from "node:path";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { classrooms, lessons, submissions, workspaces } from "@/db/schema";
+import { classrooms, frames, generations, lessons, submissions, workspaces } from "@/db/schema";
 import { dataPath, ensureDir, projectDir } from "@/lib/paths";
 import { getSetting } from "@/server/prompts";
 
@@ -49,6 +49,31 @@ async function collectAssets(workspaceId: string): Promise<{ src: string; entry:
     });
 }
 
+/**
+ * 本节画布上选定的结果（混合课：先画主角再做游戏）。
+ * 文件名固定用框体 key（如 assets/hero.png），学生换了选中的图，代码不用改就能用上新图。
+ */
+async function currentLessonAssets(workspaceId: string): Promise<{ src: string; entry: AssetEntry }[]> {
+  const fs_ = await db.query.frames.findMany({ where: and(eq(frames.workspaceId, workspaceId), isNotNull(frames.selectedGenerationId)) });
+  if (!fs_.length) return [];
+  const gens = await db.query.generations.findMany({ where: inArray(generations.id, fs_.map((f) => f.selectedGenerationId!)) });
+  return fs_.flatMap((f) => {
+    const g = gens.find((x) => x.id === f.selectedGenerationId);
+    if (!g?.outputPath) return [];
+    return [
+      {
+        src: dataPath(g.outputPath),
+        entry: {
+          file: `assets/${f.key}${path.extname(g.outputPath)}`,
+          type: f.type === "VIDEO" ? ("video" as const) : f.type === "TEXT" ? ("text" as const) : ("image" as const),
+          title: f.title,
+          from: "本节画布",
+        },
+      },
+    ];
+  });
+}
+
 /** 确保项目目录存在；已存在则只补充新素材（不覆盖学生改过的文件） */
 export async function prepareCodingProject(workspaceId: string) {
   const ws = await db.query.workspaces.findFirst({ where: eq(workspaces.id, workspaceId) });
@@ -70,12 +95,20 @@ export async function prepareCodingProject(workspaceId: string) {
 
   // 素材
   const assetsDir = ensureDir(path.join(dir, "assets"));
-  const assets = await collectAssets(workspaceId);
+  // 混合课是「从零做」：只用本节画布上的素材，不带入其它课的作品
+  const assets = lesson?.kind === "MIXED" ? [] : await collectAssets(workspaceId);
   const manifest: AssetEntry[] = [];
   for (const a of assets) {
     const dest = path.join(dir, a.entry.file);
     if (fs.existsSync(a.src) && !fs.existsSync(dest)) fs.copyFileSync(a.src, dest);
     if (fs.existsSync(dest)) manifest.push(a.entry);
+  }
+  // 本节画布的选定结果每次都同步（学生可能换了一张）
+  for (const a of await currentLessonAssets(workspaceId)) {
+    const dest = path.join(dir, a.entry.file);
+    if (!fs.existsSync(a.src)) continue;
+    if (!fs.existsSync(dest) || fs.statSync(dest).size !== fs.statSync(a.src).size) fs.copyFileSync(a.src, dest);
+    manifest.push(a.entry);
   }
   // 学生手动拖进来的素材（不在清单里的文件）也保留
   for (const f of fs.readdirSync(assetsDir)) {

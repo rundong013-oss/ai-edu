@@ -47,7 +47,7 @@ async function seedCurriculum() {
         kind: l.kind,
         ready: l.ready,
         objectives: l.objectives ?? "",
-        lessonPlan: PLAN_PLACEHOLDER,
+        lessonPlan: l.lessonPlan ?? PLAN_PLACEHOLDER,
         spareFrames: l.spareFrames ?? 2,
         codingMaxTurns: l.codingMaxTurns ?? 12,
         codingScaffold: l.codingScaffold ?? "",
@@ -81,6 +81,7 @@ async function seedCurriculum() {
             upstreamKeys: f.upstreamKeys ?? [],
             crossLessonRefs: f.crossLessonRefs ?? [],
             blockCategories: f.blockCategories ?? [],
+            transparentBg: f.transparent ?? false,
             posX: f.pos[0],
             posY: f.pos[1],
           };

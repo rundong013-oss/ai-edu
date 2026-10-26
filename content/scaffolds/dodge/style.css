@@ -1,0 +1,21 @@
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  overflow: hidden;
+  font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  background: radial-gradient(ellipse at 50% 0%, #1b2140 0%, #0a0c18 70%);
+  color: #f2f4f8;
+}
+.empty {
+  height: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+}
+.empty .hero { width: min(40vw, 180px); filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.5)); }
+.empty h1 { margin: 0; font-size: 28px; }
+.empty p { margin: 0; max-width: 320px; color: #8a93a6; line-height: 1.6; }

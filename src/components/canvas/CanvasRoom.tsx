@@ -1,6 +1,6 @@
 "use client";
 import "@xyflow/react/dist/style.css";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -14,7 +14,8 @@ import {
 } from "@xyflow/react";
 import { BackButton } from "@/components/BackButton";
 import { PageLoading } from "@/components/PageLoading";
-import { Check, Clapperboard, ImageIcon, Send, Type } from "lucide-react";
+import { ArrowRight, Check, Clapperboard, ImageIcon, Send, Type } from "lucide-react";
+import { isCanvasDone } from "@/components/room/stage";
 import type { WorkspaceState } from "@/server/workspace";
 import { FrameNode, type FrameNodeType } from "./FrameNode";
 import { PromptEditor } from "./PromptEditor";
@@ -23,14 +24,28 @@ import { SubmitDialog } from "./SubmitDialog";
 
 const nodeTypes = { frame: FrameNode };
 
-export function CanvasRoom({ workspaceId, backHref = "/student", readOnly = false, viewerNote }: { workspaceId: string; backHref?: string; readOnly?: boolean; viewerNote?: string }) {
+type StageProps = {
+  /** 混合课：顶栏中间的「画布 → 编程」步骤切换 */
+  stageNav?: React.ReactNode;
+  /** 混合课：画布任务完成后去编程 */
+  onNext?: () => void;
+  onCanvasDone?: (done: boolean) => void;
+};
+
+export function CanvasRoom({
+  workspaceId,
+  backHref = "/student",
+  readOnly = false,
+  viewerNote,
+  ...stage
+}: { workspaceId: string; backHref?: string; readOnly?: boolean; viewerNote?: string } & StageProps) {
   const { state, setState, error, refresh } = useWorkspace(workspaceId);
   if (!state) {
     return error ? <div className="grid h-dvh place-items-center text-muted">{error}</div> : <PageLoading full text="正在打开画布…" />;
   }
   return (
     <ReactFlowProvider>
-      <CanvasInner state={state} setState={setState} refresh={refresh} error={error} backHref={backHref} readOnly={readOnly} viewerNote={viewerNote} />
+      <CanvasInner state={state} setState={setState} refresh={refresh} error={error} backHref={backHref} readOnly={readOnly} viewerNote={viewerNote} {...stage} />
     </ReactFlowProvider>
   );
 }
@@ -53,7 +68,10 @@ function CanvasInner({
   backHref,
   readOnly = false,
   viewerNote,
-}: {
+  stageNav,
+  onNext,
+  onCanvasDone,
+}: StageProps & {
   state: WorkspaceState;
   setState: (s: WorkspaceState) => void;
   refresh: () => Promise<WorkspaceState | null>;
@@ -70,6 +88,19 @@ function CanvasInner({
   const [showSubmit, setShowSubmit] = useState(false);
 
   const live = state.classroom.status === "LIVE" && !readOnly;
+  const mixed = state.lesson.kind === "MIXED";
+  // 混合课的画布阶段只显示画布任务，编程任务在编程界面里
+  const tasks = useMemo(() => (mixed ? state.tasks.filter((t) => !t.codingPrompt) : state.tasks), [mixed, state.tasks]);
+  const canvasDone = isCanvasDone(state);
+  const wasDone = useRef(canvasDone);
+  useEffect(() => {
+    onCanvasDone?.(canvasDone);
+    if (canvasDone && !wasDone.current && onNext) {
+      setToast("画布任务完成！点右上角「下一步」开始编程");
+      setTimeout(() => setToast(null), 4000);
+    }
+    wasDone.current = canvasDone;
+  }, [canvasDone, onCanvasDone, onNext]);
   const blockedReason = readOnly ? viewerNote ?? "只读查看" : live ? null : state.classroom.status === "READY" ? "老师还没开课" : "这节课已经下课了";
   const taskNo = useMemo(() => new Map(state.tasks.map((t, i) => [t.id, i + 1])), [state.tasks]);
   const byId = useMemo(() => new Map(state.frames.map((f) => [f.id, f])), [state.frames]);
@@ -176,7 +207,7 @@ function CanvasInner({
   return (
     <div className="flex h-dvh flex-col">
       {/* 顶栏 */}
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-panel px-4">
+      <header className="relative flex h-14 shrink-0 items-center gap-3 border-b border-line bg-panel px-4">
         <BackButton fallback={backHref} />
         <div className="min-w-0">
           <div className="truncate text-sm font-medium">
@@ -193,11 +224,19 @@ function CanvasInner({
           </span>
         )}
         {error && <span className="text-xs text-amber">{error}</span>}
-        {!readOnly && (
-          <button className="btn btn-spark btn-sm ml-auto" onClick={() => setShowSubmit(true)}>
-            <Send size={14} />
-            提交作品
+        {stageNav && <div className="absolute left-1/2 -translate-x-1/2">{stageNav}</div>}
+        {onNext ? (
+          <button className={`btn btn-sm ml-auto ${canvasDone ? "btn-spark" : ""}`} onClick={onNext} title={canvasDone ? undefined : "先在画布上完成任务，再去编程"}>
+            下一步：编程实现
+            <ArrowRight size={14} />
           </button>
+        ) : (
+          !readOnly && (
+            <button className="btn btn-spark btn-sm ml-auto" onClick={() => setShowSubmit(true)}>
+              <Send size={14} />
+              提交作品
+            </button>
+          )
         )}
       </header>
 
@@ -206,7 +245,7 @@ function CanvasInner({
         <aside className="scroll-thin flex w-72 shrink-0 flex-col overflow-y-auto border-r border-line bg-panel p-4">
           <h2 className="mb-3 text-sm text-muted">本节任务</h2>
           <ol className="space-y-1.5">
-            {state.tasks.map((t, i) => {
+            {tasks.map((t, i) => {
               const done = t.kind !== "FREE" && taskDone(t.id);
               const active = currentTask === t.id;
               return (
@@ -234,6 +273,7 @@ function CanvasInner({
             })}
           </ol>
 
+          {state.lesson.spareFrames > 0 && (
           <div className="mt-6 border-t border-line pt-4">
             <div className="mb-2 flex items-center justify-between text-sm">
               <span className="text-muted">备用框体</span>
@@ -257,6 +297,10 @@ function CanvasInner({
             </div>
             <p className="mt-2 text-xs leading-relaxed text-muted">每个框体只能生成几次。想清楚再点生成，比多抽几次更重要。</p>
           </div>
+          )}
+          {state.lesson.spareFrames === 0 && (
+            <p className="mt-6 border-t border-line pt-4 text-xs leading-relaxed text-muted">每个框体只能生成几次。想清楚再点生成，比多抽几次更重要。</p>
+          )}
         </aside>
 
         {/* 画布 */}

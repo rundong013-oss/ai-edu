@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
+import { hasCanvas, hasCoding, type LessonKind } from "@/lib/lesson";
 
-export function LessonQuota({ id, kind, spareFrames, codingMaxTurns, codingModel }: { id: string; kind: "CANVAS" | "CODING"; spareFrames: number; codingMaxTurns: number; codingModel: string }) {
+export function LessonQuota({ id, kind, spareFrames, codingMaxTurns, codingModel }: { id: string; kind: LessonKind; spareFrames: number; codingMaxTurns: number; codingModel: string }) {
   const [v, setV] = useState({ spareFrames, codingMaxTurns, codingModel });
   const [saved, setSaved] = useState(false);
   const save = async (patch: Partial<typeof v>) => {
@@ -13,12 +14,13 @@ export function LessonQuota({ id, kind, spareFrames, codingMaxTurns, codingModel
   };
   return (
     <div className="flex items-center gap-3 text-sm">
-      {kind === "CANVAS" ? (
+      {hasCanvas(kind) && (
         <label className="flex items-center gap-2">
           <span className="text-muted">备用框体</span>
           <input type="number" min={0} max={20} className="input !h-8 w-16" defaultValue={v.spareFrames} onBlur={(e) => save({ spareFrames: Number(e.target.value) })} />
         </label>
-      ) : (
+      )}
+      {hasCoding(kind) && (
         <>
           <label className="flex items-center gap-2">
             <span className="text-muted">对话次数</span>

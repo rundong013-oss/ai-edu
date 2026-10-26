@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "@/db";
-import { codingMessages, frames, generations, submissions, workspaces, type Frame, type WorkProcess } from "@/db/schema";
+import { classrooms, codingMessages, frames, generations, lessons, submissions, workspaces, type Frame, type WorkProcess } from "@/db/schema";
 import { dataPath, ensureDir, fileUrl, projectDir, rel } from "@/lib/paths";
 
 /** 画布作品的创作过程：沿着连线往上找，按「先做的在前」列出每一步的提示词、积木、尝试次数和结果 */
@@ -77,13 +77,26 @@ export async function submitWeb(workspaceId: string, title: string, coverAsset: 
   const snapId = nanoid(12);
   const dest = ensureDir(dataPath("submissions", snapId));
   fs.cpSync(src, dest, { recursive: true, filter: (p) => !p.includes("/.claude") && !p.endsWith("CLAUDE.md") });
-  // 创作过程：学生发给 AI 的每一句话
+  // 创作过程：学生发给 AI 的每一句话；混合课在前面加上画布上生成素材的那几步
+  const room = await db.query.classrooms.findFirst({ where: eq(classrooms.id, ws.classroomId) });
+  const lesson = room ? await db.query.lessons.findFirst({ where: eq(lessons.id, room.lessonId) }) : null;
+  const mixed = lesson?.kind === "MIXED";
+  const canvasSteps: WorkProcess["steps"] = [];
+  if (mixed) {
+    const fs_ = await db.query.frames.findMany({ where: and(eq(frames.workspaceId, workspaceId), eq(frames.isSpare, false)), orderBy: asc(frames.createdAt) });
+    for (const f of fs_.filter((x) => x.selectedGenerationId)) {
+      for (const st of (await canvasProcess(f)).steps) if (!canvasSteps.some((x) => x.output === st.output)) canvasSteps.push(st);
+    }
+  }
   const msgs = await db.query.codingMessages.findMany({ where: eq(codingMessages.workspaceId, workspaceId), orderBy: asc(codingMessages.seq) });
   const process: WorkProcess = {
-    kind: "coding",
-    steps: msgs
-      .filter((m) => m.role === "user")
-      .map((m, i) => ({ title: `第 ${i + 1} 轮`, prompt: String((m.content as { text?: string }).text ?? "") })),
+    kind: mixed ? "mixed" : "coding",
+    steps: [
+      ...canvasSteps,
+      ...msgs
+        .filter((m) => m.role === "user")
+        .map((m, i) => ({ title: mixed ? `编程 · 第 ${i + 1} 轮` : `第 ${i + 1} 轮`, prompt: String((m.content as { text?: string }).text ?? "") })),
+    ],
   };
   const [s] = await db
     .insert(submissions)

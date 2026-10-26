@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/Shell";
 import { coursesWithLessons } from "@/server/queries";
+import { kindLabel } from "@/lib/lesson";
 
 export default async function TeacherCourses() {
   const courses = await coursesWithLessons();
+  const ready = courses.flatMap((c) => c.lessons.filter((l) => l.ready).map((l) => `${c.code} 第 ${l.index} 节`));
   return (
     <>
-      <PageHeader title="课程备课" desc="S1–S3 各 16 节，每节 90 分钟。目前 S1 前 3 节可以开课，其余为占位" />
+      <PageHeader title="课程备课" desc={`S1–S3 各 16 节，每节 90 分钟。目前可以开课的有 ${ready.length} 节（${ready.join("、")}），其余为占位`} />
       <div className="space-y-8">
         {courses.map((c) => (
           <section key={c.id}>
@@ -19,7 +21,7 @@ export default async function TeacherCourses() {
                     <div className="font-mono text-xs text-spark">{String(l.index).padStart(2, "0")}</div>
                     <div className="mt-1 font-medium">{l.title}</div>
                     <div className="text-xs text-muted">
-                      {l.subtitle} · {l.kind === "CANVAS" ? "画布" : "Vibe Coding"}
+                      {l.subtitle} · {kindLabel(l.kind)}
                     </div>
                   </Link>
                 ) : (

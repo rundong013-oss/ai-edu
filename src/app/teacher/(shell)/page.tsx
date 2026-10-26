@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/Shell";
 import { requireRole } from "@/lib/auth";
 import { teacherClassrooms } from "@/server/queries";
+import { kindLabel } from "@/lib/lesson";
 
 const STATUS = { READY: "未开课", LIVE: "上课中", ENDED: "已下课" } as const;
 
@@ -50,7 +51,7 @@ export default async function TeacherHome() {
                   </td>
                   <td className="text-sm">
                     {r.course.code} 第 {r.lesson.index} 节 · {r.lesson.title}
-                    <span className="ml-1.5 text-xs text-muted">{r.lesson.kind === "CANVAS" ? "画布" : "Vibe Coding"}</span>
+                    <span className="ml-1.5 text-xs text-muted">{kindLabel(r.lesson.kind)}</span>
                   </td>
                   <td className="font-mono">{r.studentCount}</td>
                   <td className="font-mono">{r.submissionCount}</td>

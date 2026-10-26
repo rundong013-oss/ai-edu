@@ -5,7 +5,7 @@ import path from "node:path";
 import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "@/db";
-import { classrooms, courses, frames, generations, lessons, usageRecords, workspaces, type Frame, type PickedBlock } from "@/db/schema";
+import { classrooms, courses, frames, frameTemplates, generations, lessons, usageRecords, workspaces, type Frame, type PickedBlock } from "@/db/schema";
 import { dataPath, ensureDir, mimeOf, rel } from "@/lib/paths";
 import { imageProvider, videoProvider } from "./providers";
 import { generateText } from "./providers/text";
@@ -104,7 +104,8 @@ export async function startGeneration(opts: {
     .returning();
 
   // 2) 异步执行（Node 常驻进程里跑，前端轮询状态）
-  void runGeneration(gen.id, { ...opts, refPaths, composed, aspectRatio: frame.aspectRatio, type: frame.type });
+  const tpl = frame.templateId ? await db.query.frameTemplates.findFirst({ where: eq(frameTemplates.id, frame.templateId) }) : null;
+  void runGeneration(gen.id, { ...opts, refPaths, composed, aspectRatio: frame.aspectRatio, type: frame.type, transparent: !!tpl?.transparentBg });
   return gen;
 }
 
@@ -119,6 +120,7 @@ async function runGeneration(
     composed: { prompt: string; system: string | null };
     aspectRatio: string;
     type: "IMAGE" | "VIDEO" | "TEXT";
+    transparent: boolean;
   },
 ) {
   const t0 = Date.now();
@@ -136,7 +138,7 @@ async function runGeneration(
       Object.assign(usage, { provider: r.model === "mock-text" ? "mock" : "claude", model: r.model, costUsd: r.costUsd, inputTokens: r.inputTokens, outputTokens: r.outputTokens });
     } else {
       const provider = o.type === "VIDEO" ? videoProvider() : imageProvider();
-      const r = await provider.generate({ prompt: o.composed.prompt, aspectRatio: o.aspectRatio, refs });
+      const r = await provider.generate({ prompt: o.composed.prompt, aspectRatio: o.aspectRatio, refs, transparent: o.transparent && o.type === "IMAGE" });
       const file = path.join(dir, `${nanoid(14)}.${r.ext}`);
       fs.writeFileSync(file, r.bytes);
       outputPath = rel(file);

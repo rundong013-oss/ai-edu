@@ -51,7 +51,11 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
         <section className="mt-10">
           <h2 className="text-lg font-semibold">是怎么做出来的</h2>
           <p className="mt-1 text-sm text-muted">
-            {w.process?.kind === "coding" ? "孩子用自己的话一步步告诉 AI 要做什么、怎么改：" : "每一步都是孩子自己写的提示词，AI 按提示词生成："}
+            {w.process?.kind === "coding"
+              ? "孩子用自己的话一步步告诉 AI 要做什么、怎么改："
+              : w.process?.kind === "mixed"
+                ? "孩子先写提示词让 AI 画出素材，再用自己的话一步步告诉 AI 要做什么、怎么改："
+                : "每一步都是孩子自己写的提示词，AI 按提示词生成："}
           </p>
           <ol className="mt-4 space-y-4">
             {steps.map((s, i) => (

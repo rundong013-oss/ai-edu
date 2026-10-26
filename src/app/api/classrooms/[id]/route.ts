@@ -5,6 +5,7 @@ import { apiSession, jsonError } from "@/lib/auth";
 import { getOrCreateWorkspace } from "@/server/workspace";
 import { prepareCodingProject } from "@/server/coding/project";
 import { lessons } from "@/db/schema";
+import { hasCoding } from "@/lib/lesson";
 
 /** 开课 / 下课 / 改学生 / 投屏 */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -22,7 +23,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const members = await db.query.classroomStudents.findMany({ where: eq(classroomStudents.classroomId, id) });
     for (const m of members) {
       const ws = await getOrCreateWorkspace(id, m.studentId);
-      if (lesson?.kind === "CODING") await prepareCodingProject(ws.id);
+      if (lesson && hasCoding(lesson.kind)) await prepareCodingProject(ws.id);
     }
   } else if (body.action === "end") {
     await db.update(classrooms).set({ status: "ENDED", endedAt: new Date() }).where(eq(classrooms.id, id));

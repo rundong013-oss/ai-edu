@@ -102,10 +102,23 @@ function withBase(html: string, base: string) {
   return tag + html;
 }
 
-export function CodingRoom({ workspaceId, backHref = "/student", readOnly = false, viewerNote }: { workspaceId: string; backHref?: string; readOnly?: boolean; viewerNote?: string }) {
+export function CodingRoom({
+  workspaceId,
+  backHref = "/student",
+  readOnly = false,
+  viewerNote,
+  stageNav,
+}: {
+  workspaceId: string;
+  backHref?: string;
+  readOnly?: boolean;
+  viewerNote?: string;
+  /** 混合课：顶栏中间的「画布 → 编程」步骤切换 */
+  stageNav?: React.ReactNode;
+}) {
   const { state, feed, running, draft, previewVersion, bumpPreview, error, setError, send, stop } = useCoding(workspaceId);
   const [input, setInput] = useState("");
-  const [device, setDevice] = useState<"phone" | "desktop">("phone");
+  const [deviceChoice, setDevice] = useState<"phone" | "desktop" | null>(null);
   const [codeFile, setCodeFile] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [showSubmit, setShowSubmit] = useState(false);
@@ -146,6 +159,10 @@ export function CodingRoom({ workspaceId, backHref = "/student", readOnly = fals
   if (!state) return error ? <div className="grid h-dvh place-items-center text-muted">{error}</div> : <PageLoading full text="正在打开项目…" />;
 
   const live = state.classroom.status === "LIVE";
+  // 混合课（如做游戏）默认用电脑视图预览，网页课默认手机视图
+  const device = deviceChoice ?? (state.lesson.kind === "MIXED" ? "desktop" : "phone");
+  // 只显示带编程提示词的任务；编号沿用整节课的任务顺序
+  const codingTasks = state.tasks.map((t, i) => ({ ...t, no: i + 1 })).filter((t) => t.codingPrompt);
   const left = state.lesson.maxTurns - state.workspace.turnsUsed;
   const canSend = live && !running && left > 0 && input.trim().length > 0;
   const codeFiles = state.files.filter((f) => /\.(html|css|js)$/.test(f.path));
@@ -167,7 +184,7 @@ export function CodingRoom({ workspaceId, backHref = "/student", readOnly = fals
 
   return (
     <div className="flex h-dvh flex-col">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-panel px-4">
+      <header className="relative flex h-14 shrink-0 items-center gap-3 border-b border-line bg-panel px-4">
         <BackButton fallback={backHref} />
         <div className="min-w-0">
           <div className="truncate text-sm font-medium">
@@ -179,6 +196,7 @@ export function CodingRoom({ workspaceId, backHref = "/student", readOnly = fals
           {live && <span className="live-dot" />}
           {live ? "上课中" : state.classroom.status === "READY" ? "等待开课" : "已下课"}
         </span>
+        {stageNav && <div className="absolute left-1/2 -translate-x-1/2">{stageNav}</div>}
         {readOnly ? (
           <span className="tag ml-auto">{viewerNote ?? "只读查看"}</span>
         ) : (
@@ -195,7 +213,7 @@ export function CodingRoom({ workspaceId, backHref = "/student", readOnly = fals
           <div className="scroll-thin flex-1 space-y-3 overflow-y-auto px-4 py-4">
             {feed.length === 0 && (
               <div className="rounded-xl border border-dashed border-line p-4 text-sm leading-relaxed text-muted">
-                在下面告诉 AI 你想做什么样的网页。不知道怎么开口？点一下下面的「任务」，会帮你填好第一句话。
+                在下面告诉 AI 你想做什么。不知道怎么开口？点一下下面的「任务」，会帮你填好第一句话。
               </div>
             )}
             {feed.map((f) => (
@@ -217,7 +235,7 @@ export function CodingRoom({ workspaceId, backHref = "/student", readOnly = fals
           ) : (
           <div className="border-t border-line p-3">
             <div className="mb-2 flex flex-wrap gap-1.5">
-              {state.tasks.map((t, i) => (
+              {codingTasks.map((t) => (
                 <button
                   key={t.id}
                   title={t.description}
@@ -227,7 +245,7 @@ export function CodingRoom({ workspaceId, backHref = "/student", readOnly = fals
                     ta.current?.focus();
                   }}
                 >
-                  任务{i + 1} · {t.title.replace(/^任务[一二三四五六七八九十]+：/, "")}
+                  任务{t.no} · {t.title.replace(/^任务[一二三四五六七八九十]+：/, "")}
                 </button>
               ))}
             </div>
@@ -350,6 +368,7 @@ export function CodingRoom({ workspaceId, backHref = "/student", readOnly = fals
       {showSubmit && (
         <WebSubmitDialog
           workspaceId={workspaceId}
+          defaultTitle={`我的${state.lesson.title}`}
           assets={assetsImages.filter((a) => a.type === "image")}
           onClose={() => setShowSubmit(false)}
           onDone={() => {
@@ -366,22 +385,24 @@ export function CodingRoom({ workspaceId, backHref = "/student", readOnly = fals
 
 function WebSubmitDialog({
   workspaceId,
+  defaultTitle,
   assets,
   onClose,
   onDone,
 }: {
   workspaceId: string;
+  defaultTitle: string;
   assets: { file: string; title: string }[];
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [title, setTitle] = useState("我的角色图鉴");
+  const [title, setTitle] = useState(defaultTitle);
   const [cover, setCover] = useState<string | null>(assets[0]?.file ?? null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   return (
-    <Modal title="提交网页作品" onClose={onClose}>
-      <p className="mb-4 text-sm text-muted">提交的是网页现在的样子。之后你继续修改，可以再提交一次新版本。</p>
+    <Modal title="提交作品" onClose={onClose}>
+      <p className="mb-4 text-sm text-muted">提交的是作品现在的样子。之后你继续修改，可以再提交一次新版本。</p>
       <label className="block">
         <span className="mb-1.5 block text-sm text-muted">作品名称</span>
         <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={30} />

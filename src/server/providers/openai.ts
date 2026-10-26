@@ -25,14 +25,16 @@ export function openaiImage(): ImageProvider {
     async generate(req) {
       // OpenAI 只接受位图作参考；mock 留下的 SVG 之类跳过
       const refs = req.refs.filter((r) => /image\/(png|jpeg|webp)/.test(r.mime));
+      // 透明背景：游戏角色贴图用，必须输出 png
+      const bg = req.transparent ? ({ background: "transparent", output_format: "png" } as const) : {};
       const call = async (size: ReturnType<typeof sizeFor> | "auto") => {
         if (refs.length) {
           const files = await Promise.all(
             refs.map((r) => toFile(fs.createReadStream(r.abs), path.basename(r.abs), { type: r.mime })),
           );
-          return client.images.edit({ model: editModel, image: files, prompt: req.prompt, size, quality });
+          return client.images.edit({ model: editModel, image: files, prompt: req.prompt, size, quality, ...bg });
         }
-        return client.images.generate({ model, prompt: req.prompt, size, quality, n: 1 });
+        return client.images.generate({ model, prompt: req.prompt, size, quality, n: 1, ...bg });
       };
       let res;
       try {

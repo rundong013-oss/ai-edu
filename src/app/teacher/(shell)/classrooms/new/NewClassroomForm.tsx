@@ -1,8 +1,9 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { kindLabel, type LessonKind } from "@/lib/lesson";
 
-type C = { id: string; title: string; lessons: { id: string; index: number; title: string; subtitle: string; kind: string; ready: boolean }[]; licensed: string[] };
+type C = { id: string; title: string; lessons: { id: string; index: number; title: string; subtitle: string; kind: LessonKind; ready: boolean }[]; licensed: string[] };
 
 export function NewClassroomForm({ courses, students }: { courses: C[]; students: { id: string; name: string; username: string }[] }) {
   const router = useRouter();
@@ -68,7 +69,7 @@ export function NewClassroomForm({ courses, students }: { courses: C[]; students
                 <option key={l.id} value={l.id} disabled={!l.ready}>
                   第 {l.index} 节 · {l.title}
                   {l.subtitle ? `（${l.subtitle}）` : ""}
-                  {l.ready ? (l.kind === "CODING" ? " · Vibe Coding" : " · 画布") : " · 待设计"}
+                  {l.ready ? ` · ${kindLabel(l.kind)}` : " · 待设计"}
                 </option>
               ))}
             </select>

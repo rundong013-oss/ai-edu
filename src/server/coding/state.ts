@@ -25,7 +25,7 @@ export async function codingState(workspaceId: string) {
   return {
     workspace: { id: ws.id, turnsUsed: ws.codingTurnsUsed, busy: ws.codingBusy },
     classroom: { id: full.room.id, name: full.room.name, status: full.room.status },
-    lesson: { index: full.lesson.index, title: full.lesson.title, courseCode: full.course.code, maxTurns: lesson!.codingMaxTurns },
+    lesson: { index: full.lesson.index, title: full.lesson.title, kind: full.lesson.kind, courseCode: full.course.code, maxTurns: lesson!.codingMaxTurns },
     tasks: tasks.map((t) => ({ id: t.id, title: t.title, description: t.description, kind: t.kind, codingPrompt: t.codingPrompt })),
     history: msgs.map((m) => ({ id: m.id, role: m.role, content: m.content as Record<string, unknown>, runId: m.runId })),
     live: live && !live.finished ? { runId: live.runId, eventCount: live.events.length } : null,

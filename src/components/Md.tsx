@@ -1,4 +1,4 @@
-// 极简 markdown：段落、引用、有序/无序列表、**加粗**。课程目标和教案占位够用了。
+// 极简 markdown：小标题（###）、段落、引用、有序/无序列表、**加粗**。课程目标和教案够用了。
 function inline(s: string) {
   return s.split(/(\*\*[^*]+\*\*)/g).map((p, i) => (p.startsWith("**") ? <strong key={i} className="text-ink">{p.slice(2, -2)}</strong> : p));
 }
@@ -8,6 +8,12 @@ export function Md({ text, className = "" }: { text: string; className?: string 
   return (
     <div className={`space-y-3 text-sm leading-relaxed text-ink/80 ${className}`}>
       {blocks.map((b, i) => {
+        if (/^#{1,4}\s/.test(b) && !b.includes("\n"))
+          return (
+            <h3 key={i} className="pt-2 text-[15px] font-semibold text-ink">
+              {inline(b.replace(/^#{1,4}\s/, ""))}
+            </h3>
+          );
         const lines = b.split("\n");
         if (lines.every((l) => /^\d+\.\s/.test(l)))
           return (
