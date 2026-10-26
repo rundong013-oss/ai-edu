@@ -238,6 +238,21 @@ select.input {
     opacity: 0;
   }
 }
+
+/* 登录页：文字和卡片依次浮现 */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.login-rise {
+  animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
 .caret::after {
   content: "▍";
   color: var(--spark);
